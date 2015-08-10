@@ -52,6 +52,10 @@ if BACKEND_TYPE_PORTS
 SUBDIRS += ports
 endif
 
+if BACKEND_TYPE_PKG
+SUBDIRS += pkg
+endif
+
 clean-local :
 	rm -f *~
 

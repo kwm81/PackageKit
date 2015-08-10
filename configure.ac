@@ -411,6 +411,7 @@ AC_ARG_ENABLE(dummy, AS_HELP_STRING([--enable-dummy],[use the dummy backend]),en
 AC_ARG_ENABLE(entropy, AS_HELP_STRING([--enable-entropy],[use the entropy backend]),enable_entropy=$enableval,enable_entropy=no)
 AC_ARG_ENABLE(hif, AS_HELP_STRING([--enable-hif],[use the hif backend]),enable_hif=$enableval,enable_hif=no)
 AC_ARG_ENABLE(pisi, AS_HELP_STRING([--enable-pisi],[use the PiSi backend]),enable_pisi=$enableval,enable_pisi=no)
+AC_ARG_ENABLE(pkg, AS_HELP_STRING([--enable-pkg],[use the pkg backend]),enable_pkg=$enableval,enable_pkg=no)
 AC_ARG_ENABLE(poldek, AS_HELP_STRING([--enable-poldek],[use the poldek backend]),enable_poldek=$enableval,enable_poldek=no)
 AC_ARG_ENABLE(portage, AS_HELP_STRING([--enable-portage],[use the portage backend]),enable_portage=$enableval,enable_portage=no)
 AC_ARG_ENABLE(ports, AS_HELP_STRING([--enable-ports],[use the ports backend]),enable_ports=$enableval,enable_ports=no)
@@ -426,6 +427,7 @@ AM_CONDITIONAL(BACKEND_TYPE_DUMMY, [test x$enable_dummy = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_ENTROPY, [test x$enable_entropy = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_HIF, [test x$enable_hif = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_PISI, [test x$enable_pisi = xyes])
+AM_CONDITIONAL(BACKEND_TYPE_PKG, [test x$enable_pkg = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_POLDEK, [test x$enable_poldek = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_PORTAGE, [test x$enable_portage = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_PORTS, [test x$enable_ports = xyes])
@@ -514,6 +516,11 @@ if test x$enable_alpm = xyes; then
 	PKG_CHECK_MODULES(ALPM, libalpm >= 8.2.0)
 fi
 
+dnl xxx
+if test x$enable_pkg = xyes; then
+	PKG_CHECK_MODULES(LIBPKG, pkg >= 1.5.0)
+fi
+
 if test x$enable_poldek = xyes; then
 	POLDEK_CFLAGS="-I/usr/include/poldek"
 	POLDEK_LIBS="-lpoclidek -lpoldek"
@@ -585,6 +592,7 @@ backends/urpmi/helpers/perl_packagekit/Makefile
 backends/urpmi/helpers/urpmi_backend/Makefile
 backends/yum/Makefile
 backends/pisi/Makefile
+backends/pkg/Makefile
 backends/poldek/Makefile
 backends/portage/Makefile
 backends/ports/Makefile
@@ -647,6 +655,7 @@ echo "
         poldek backend:            ${enable_poldek}
         Portage backend:           ${enable_portage}
         Ports backend:             ${enable_ports}
+        Pkg backend:               ${enable_pkg}
         Katja backend:             ${enable_katja}
         URPMI backend:             ${enable_urpmi}
         YUM backend:               ${enable_yum}
