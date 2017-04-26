@@ -57,7 +57,7 @@ SUBDIRS += nix
 endif
 
 if BACKEND_TYPE_PKG
-SUBDIRS += PKG
+SUBDIRS += pkg
 endif
 
 clean-local :
