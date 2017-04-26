@@ -74,6 +74,10 @@ typedef struct
 	GObjectClass	parent_class;
 } PkBackendJobClass;
 
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(PkBackendJob, g_object_unref)
+#endif
+
 GType		 pk_backend_job_get_type		(void);
 PkBackendJob	*pk_backend_job_new			(GKeyFile		*conf);
 
@@ -131,14 +135,14 @@ void		 pk_backend_job_set_frontend_socket	(PkBackendJob	*job,
 							 const gchar	*frontend_socket);
 void		 pk_backend_job_set_cache_age		(PkBackendJob	*job,
 							 guint		 cache_age);
-gchar		*pk_backend_job_get_proxy_ftp		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_proxy_http		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_proxy_https		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_proxy_socks		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_no_proxy		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_pac			(PkBackendJob	*job);
-gchar		*pk_backend_job_get_locale		(PkBackendJob	*job);
-gchar		*pk_backend_job_get_frontend_socket	(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_proxy_ftp		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_proxy_http		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_proxy_https		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_proxy_socks		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_no_proxy		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_pac			(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_locale		(PkBackendJob	*job);
+const gchar	*pk_backend_job_get_frontend_socket	(PkBackendJob	*job);
 guint		 pk_backend_job_get_cache_age		(PkBackendJob	*job);
 
 /* transaction vfuncs */

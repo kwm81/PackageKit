@@ -172,6 +172,7 @@ libpackagekit_glib2_la_CFLAGS =					\
 noinst_LIBRARIES = libpackagekitprivate.a
 libpackagekitprivate_a_SOURCES =				\
 	packagekit-private.h					\
+	pk-common-private.h					\
 	pk-console-shared.c					\
 	pk-console-shared.h					\
 	pk-progress-bar.c					\
@@ -234,7 +235,8 @@ EXTRA_DIST =							\
 	packagekit-glib2.pc.in					\
 	pk-version.h.in						\
 	pk-enum-types.h.template				\
-	pk-enum-types.c.template
+	pk-enum-types.c.template				\
+	PackageKitGlib-1.0.metadata
 
 BUILT_SOURCES = 						\
 	pk-enum-types.h						\

@@ -34,10 +34,9 @@
 #include <string.h>
 #include <sys/utsname.h>
 
-#include "src/pk-cleanup.h"
-
 #include <glib.h>
 #include <packagekit-glib2/pk-common.h>
+#include <packagekit-glib2/pk-common-private.h>
 #include <packagekit-glib2/pk-enum.h>
 
 /**
@@ -225,6 +224,54 @@ pk_get_distro_id_machine_type (void)
 }
 
 /**
+ * pk_parse_os_release:
+ *
+ * Internal helper to parse os-release
+ **/
+static gboolean
+pk_parse_os_release (gchar **id, gchar **name, gchar **version_id, GError **error)
+{
+	const gchar *filename = "/etc/os-release";
+	gboolean ret;
+	g_autofree gchar *contents = NULL;
+	g_autoptr(GKeyFile) key_file = NULL;
+	g_autoptr(GString) str = NULL;
+
+	/* load data */
+	if (!g_file_test (filename, G_FILE_TEST_EXISTS))
+		filename = "/usr/lib/os-release";
+	if (!g_file_get_contents (filename, &contents, NULL, error))
+		return FALSE;
+
+	/* make a valid GKeyFile from the .ini data by prepending a header */
+	str = g_string_new (contents);
+	g_string_prepend (str, "[os-release]\n");
+	key_file = g_key_file_new ();
+	ret = g_key_file_load_from_data (key_file, str->str, -1, G_KEY_FILE_NONE, error);
+	if (!ret) {
+		return FALSE;
+	}
+
+	/* get keys */
+	if (id != NULL) {
+		*id = g_key_file_get_string (key_file, "os-release", "ID", error);
+		if (*id == NULL)
+			return FALSE;
+	}
+	if (name != NULL) {
+		*name = g_key_file_get_string (key_file, "os-release", "NAME", error);
+		if (*name == NULL)
+			return FALSE;
+	}
+	if (version_id != NULL) {
+		*version_id = g_key_file_get_string (key_file, "os-release", "VERSION_ID", error);
+		if (*version_id == NULL)
+			return FALSE;
+	}
+	return TRUE;
+}
+
+/**
  * pk_get_distro_id:
  *
  * Return value: the distro-id, typically "distro;version;arch"
@@ -232,43 +279,58 @@ pk_get_distro_id_machine_type (void)
 gchar *
 pk_get_distro_id (void)
 {
-	const gchar *filename = "/etc/os-release";
 	gboolean ret;
-	_cleanup_error_free_ GError *error = NULL;
-	_cleanup_free_ gchar *arch = NULL;
-	_cleanup_free_ gchar *contents = NULL;
-	_cleanup_free_ gchar *name = NULL;
-	_cleanup_free_ gchar *version = NULL;
-	_cleanup_keyfile_unref_ GKeyFile *key_file = NULL;
-	_cleanup_string_free_ GString *str = NULL;
+	g_autoptr(GError) error = NULL;
+	g_autofree gchar *arch = NULL;
+	g_autofree gchar *id = NULL;
+	g_autofree gchar *version = NULL;
 
 	/* we don't want distro specific results in 'make check' */
 	if (g_getenv ("PK_SELF_TEST") != NULL)
 		return g_strdup ("selftest;11.91;i686");
 
-	/* load data */
-	if (!g_file_test (filename, G_FILE_TEST_EXISTS))
-		filename = "/usr/lib/os-release";
-	if (!g_file_get_contents (filename, &contents, NULL, NULL))
-		return NULL;
-
-	/* make a valid GKeyFile from the .ini data by prepending a header */
-	str = g_string_new (contents);
-	g_string_prepend (str, "[os-release]\n");
-	key_file = g_key_file_new ();
-	ret = g_key_file_load_from_data (key_file, str->str, -1, G_KEY_FILE_NONE, &error);
+	ret = pk_parse_os_release (&id, NULL, &version, &error);
 	if (!ret) {
 		g_warning ("failed to load os-release: %s", error->message);
 		return NULL;
 	}
 
-	/* get keys */
-	name = g_key_file_get_string (key_file, "os-release", "ID", NULL);
-	if (name == NULL)
-		return NULL;
-	version = g_key_file_get_string (key_file, "os-release", "VERSION_ID", NULL);
-	if (version == NULL)
-		return NULL;
 	arch = pk_get_distro_id_machine_type ();
-	return g_strdup_printf ("%s;%s;%s", name, version, arch);
+	return g_strdup_printf ("%s;%s;%s", id, version, arch);
+}
+
+/**
+ * pk_get_distro_name:
+ *
+ * Return value: the distro name, e.g. "Fedora", as specified by NAME in /etc/os-release
+ **/
+gchar *
+pk_get_distro_name (GError **error)
+{
+	gboolean ret;
+	gchar *name = NULL;
+
+	ret = pk_parse_os_release (NULL, &name, NULL, error);
+	if (!ret)
+		return NULL;
+
+	return name;
+}
+
+/**
+ * pk_get_distro_version_id:
+ *
+ * Return value: the distro version, e.g. "23", as specified by VERSION_ID in /etc/os-release
+ **/
+gchar *
+pk_get_distro_version_id (GError **error)
+{
+	gboolean ret;
+	gchar *version_id = NULL;
+
+	ret = pk_parse_os_release (NULL, NULL, &version_id, error);
+	if (!ret)
+		return NULL;
+
+	return version_id;
 }

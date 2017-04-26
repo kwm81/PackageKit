@@ -1,6 +1,8 @@
-/*
+/* apt-cache-file.h
+ *
  * Copyright (c) 2012 Daniel Nicoletti <dantti12@gmail.com>
  * Copyright (c) 2012 Matthias Klumpp <matthias@tenstral.net>
+ * Copyright (c) 2016 Harald Sitter <sitter@kde.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,8 +19,8 @@
  * the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#ifndef APTCACHEFILE_H
-#define APTCACHEFILE_H
+#ifndef APT_CACHE_FILE_H
+#define APT_CACHE_FILE_H
 
 #include <apt-pkg/cachefile.h>
 #include <pk-backend.h>
@@ -128,7 +130,7 @@ public:
 
     bool tryToInstall(pkgProblemResolver &Fix,
                       const pkgCache::VerIterator &ver,
-                      bool BrokenFix);
+                      bool BrokenFix, bool autoInst, bool preserveAuto);
 
     void tryToRemove(pkgProblemResolver &Fix,
                      const pkgCache::VerIterator &ver);
@@ -141,4 +143,22 @@ private:
     PkBackendJob *m_job;
 };
 
-#endif // APTCACHEFILE_H
+/**
+ * This class is maent to show Operation Progress using PackageKit
+ */
+class OpPackageKitProgress : public OpProgress
+{
+public:
+    OpPackageKitProgress(PkBackendJob *job);
+    virtual ~OpPackageKitProgress();
+
+    virtual void Done();
+
+protected:
+    virtual void Update();
+
+private:
+    PkBackendJob  *m_job;
+};
+
+#endif // APT_CACHE_FILE_H

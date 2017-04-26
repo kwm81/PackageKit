@@ -76,8 +76,15 @@ const gchar		*pk_offline_action_to_string	(PkOfflineAction	 action);
 PkOfflineAction		 pk_offline_action_from_string	(const gchar		*action);
 PkOfflineAction		 pk_offline_get_action		(GError			**error);
 gchar			**pk_offline_get_prepared_ids	(GError			**error);
+gchar			*pk_offline_get_prepared_upgrade_name
+							(GError			**error);
+gchar			*pk_offline_get_prepared_upgrade_version
+							(GError			**error);
 PkPackageSack		*pk_offline_get_prepared_sack	(GError			**error);
 GFileMonitor		*pk_offline_get_prepared_monitor(GCancellable		*cancellable,
+							 GError			**error);
+GFileMonitor		*pk_offline_get_prepared_upgrade_monitor
+							(GCancellable		*cancellable,
 							 GError			**error);
 GFileMonitor		*pk_offline_get_action_monitor	(GCancellable		*cancellable,
 							 GError			**error);
@@ -88,6 +95,9 @@ gboolean		 pk_offline_cancel		(GCancellable		*cancellable,
 gboolean		 pk_offline_clear_results	(GCancellable		*cancellable,
 							 GError			**error);
 gboolean		 pk_offline_trigger		(PkOfflineAction	 action,
+							 GCancellable		*cancellable,
+							 GError			**error);
+gboolean		 pk_offline_trigger_upgrade	(PkOfflineAction	 action,
 							 GCancellable		*cancellable,
 							 GError			**error);
 

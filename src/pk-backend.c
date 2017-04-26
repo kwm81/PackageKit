@@ -35,13 +35,8 @@
 #include <packagekit-glib2/pk-results.h>
 #include <packagekit-glib2/pk-common.h>
 
-#include "pk-cleanup.h"
 #include "pk-backend.h"
 #include "pk-shared.h"
-
-#ifdef PK_BUILD_DAEMON
-  #include "pk-network.h"
-#endif
 
 #define PK_BACKEND_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), PK_TYPE_BACKEND, PkBackendPrivate))
 
@@ -180,6 +175,11 @@ typedef struct {
 							 PkBackendJob	*job,
 							 PkBitfield	 filters,
 							 gchar		**values);
+	void		(*upgrade_system)		(PkBackend	*backend,
+							 PkBackendJob	*job,
+							 PkBitfield	 transaction_flags,
+							 const gchar	*distro_id,
+							 PkUpgradeKindEnum upgrade_kind);
 	void		(*repair_system)		(PkBackend	*backend,
 							 PkBackendJob	*job,
 							 PkBitfield	 transaction_flags);
@@ -198,9 +198,6 @@ struct PkBackendPrivate
 	PkBitfield		 roles;
 	GKeyFile		*conf;
 	GFileMonitor		*monitor;
-#ifdef PK_BUILD_DAEMON
-	PkNetwork		*network;
-#endif
 	gboolean		 backend_roles_set;
 	gpointer		 user_data;
 	GHashTable		*thread_hash;
@@ -409,6 +406,8 @@ pk_backend_get_roles (PkBackend *backend)
 		pk_bitfield_add (roles, PK_ROLE_ENUM_GET_DISTRO_UPGRADES);
 	if (desc->get_categories != NULL)
 		pk_bitfield_add (roles, PK_ROLE_ENUM_GET_CATEGORIES);
+	if (desc->upgrade_system != NULL)
+		pk_bitfield_add (roles, PK_ROLE_ENUM_UPGRADE_SYSTEM);
 	if (desc->repair_system != NULL)
 		pk_bitfield_add (roles, PK_ROLE_ENUM_REPAIR_SYSTEM);
 	pk_bitfield_add (roles, PK_ROLE_ENUM_GET_OLD_TRANSACTIONS);
@@ -438,7 +437,7 @@ static gchar *
 pk_backend_build_library_path (PkBackend *backend, const gchar *name)
 {
 	gchar *path;
-	_cleanup_free_ gchar *filename = NULL;
+	g_autofree gchar *filename = NULL;
 #if PK_BUILD_LOCAL
 	const gchar *directory;
 #endif
@@ -485,8 +484,8 @@ pk_backend_load (PkBackend *backend, GError **error)
 	GModule *handle;
 	gboolean ret = FALSE;
 	gpointer func = NULL;
-	_cleanup_free_ gchar *backend_name = NULL;
-	_cleanup_free_ gchar *path = NULL;
+	g_autofree gchar *backend_name = NULL;
+	g_autofree gchar *path = NULL;
 
 	g_return_val_if_fail (PK_IS_BACKEND (backend), FALSE);
 	g_return_val_if_fail (pk_is_thread_default (), FALSE);
@@ -507,10 +506,11 @@ pk_backend_load (PkBackend *backend, GError **error)
 	if (backend_name == NULL)
 		return FALSE;
 
-	/* the "hawkey" backend was renamed to "hif" */
-	if (g_strcmp0 (backend_name, "hawkey") == 0) {
+	/* the "hawkey" and "hif" backends are superseded by "dnf" */
+	if (g_strcmp0 (backend_name, "hawkey") == 0 ||
+	    g_strcmp0 (backend_name, "hif") == 0) {
 		g_free (backend_name);
-		backend_name = g_strdup ("hif");
+		backend_name = g_strdup ("dnf");
 	}
 
 	g_debug ("Trying to load : %s", backend_name);
@@ -569,6 +569,7 @@ pk_backend_load (PkBackend *backend, GError **error)
 		g_module_symbol (handle, "pk_backend_stop_job", (gpointer *)&desc->job_stop);
 		g_module_symbol (handle, "pk_backend_update_packages", (gpointer *)&desc->update_packages);
 		g_module_symbol (handle, "pk_backend_what_provides", (gpointer *)&desc->what_provides);
+		g_module_symbol (handle, "pk_backend_upgrade_system", (gpointer *)&desc->upgrade_system);
 		g_module_symbol (handle, "pk_backend_repair_system", (gpointer *)&desc->repair_system);
 
 		/* get old static string data */
@@ -725,7 +726,7 @@ static gboolean
 pk_backend_installed_db_changed_cb (gpointer user_data)
 {
 	PkBackend *backend = PK_BACKEND (user_data);
-	_cleanup_error_free_ GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	if (!backend->priv->transaction_in_progress) {
 		g_debug ("invalidating offline updates");
@@ -915,19 +916,9 @@ pk_backend_bool_to_string (gboolean value)
 gboolean
 pk_backend_is_online (PkBackend *backend)
 {
-#ifdef PK_BUILD_DAEMON
-	PkNetworkEnum state;
-	g_return_val_if_fail (PK_IS_BACKEND (backend), FALSE);
-	state = pk_network_get_network_state (backend->priv->network);
-	if (state == PK_NETWORK_ENUM_ONLINE ||
-	    state == PK_NETWORK_ENUM_MOBILE ||
-	    state == PK_NETWORK_ENUM_WIFI ||
-	    state == PK_NETWORK_ENUM_WIRED)
-		return TRUE;
-	return FALSE;
-#else
-	return TRUE;
-#endif
+	GNetworkMonitor *network_monitor;
+	network_monitor = g_network_monitor_get_default ();
+	return g_network_monitor_get_network_available (network_monitor);
 }
 
 /**
@@ -1040,7 +1031,7 @@ pk_backend_get_accepted_eula_string (PkBackend *backend)
 {
 	GString *string;
 	GList *l;
-	_cleanup_list_free_ GList *keys = NULL;
+	g_autoptr(GList) keys = NULL;
 
 	g_return_val_if_fail (PK_IS_BACKEND (backend), FALSE);
 	g_return_val_if_fail (pk_is_thread_default (), FALSE);
@@ -1107,8 +1098,8 @@ pk_backend_watch_file (PkBackend *backend,
 		       PkBackendFileChanged func,
 		       gpointer data)
 {
-	_cleanup_error_free_ GError *error = NULL;
-	_cleanup_object_unref_ GFile *file = NULL;
+	g_autoptr(GError) error = NULL;
+	g_autoptr(GFile) file = NULL;
 
 	g_return_val_if_fail (PK_IS_BACKEND (backend), FALSE);
 	g_return_val_if_fail (filename != NULL, FALSE);
@@ -1152,14 +1143,12 @@ pk_backend_finalize (GObject *object)
 
 	g_free (backend->priv->name);
 
-#ifdef PK_BUILD_DAEMON
-	g_object_unref (backend->priv->network);
-#endif
 	g_key_file_unref (backend->priv->conf);
 	g_hash_table_destroy (backend->priv->eulas);
 
 	g_mutex_clear (&backend->priv->thread_hash_mutex);
 	g_hash_table_unref (backend->priv->thread_hash);
+	g_free (backend->priv->desc);
 
 	if (backend->priv->monitor != NULL)
 		g_object_unref (backend->priv->monitor);
@@ -1169,6 +1158,7 @@ pk_backend_finalize (GObject *object)
 		g_source_remove (backend->priv->updates_changed_id);
 	if (backend->priv->handle != NULL)
 		g_module_close (backend->priv->handle);
+
 	G_OBJECT_CLASS (pk_backend_parent_class)->finalize (object);
 }
 
@@ -1838,6 +1828,35 @@ pk_backend_get_packages (PkBackend *backend, PkBackendJob *job, PkBitfield filte
 }
 
 /**
+ * pk_backend_upgrade_system:
+ */
+void
+pk_backend_upgrade_system (PkBackend *backend,
+			   PkBackendJob *job,
+			   PkBitfield transaction_flags,
+			   const gchar *distro_id,
+			   PkUpgradeKindEnum upgrade_kind)
+{
+	g_return_if_fail (PK_IS_BACKEND (backend));
+	g_return_if_fail (backend->priv->desc->upgrade_system != NULL);
+
+	/* final pre-flight checks */
+	g_assert (pk_backend_job_get_vfunc_enabled (job, PK_BACKEND_SIGNAL_FINISHED));
+
+	pk_backend_job_set_role (job, PK_ROLE_ENUM_UPGRADE_SYSTEM);
+	pk_backend_job_set_transaction_flags (job, transaction_flags);
+	pk_backend_job_set_parameters (job, g_variant_new ("(tsu)",
+							   transaction_flags,
+							   distro_id,
+							   upgrade_kind));
+	backend->priv->desc->upgrade_system (backend,
+					     job,
+					     transaction_flags,
+					     distro_id,
+					     upgrade_kind);
+}
+
+/**
  * pk_backend_repair_system:
  */
 void
@@ -1864,9 +1883,6 @@ static void
 pk_backend_init (PkBackend *backend)
 {
 	backend->priv = PK_BACKEND_GET_PRIVATE (backend);
-#ifdef PK_BUILD_DAEMON
-	backend->priv->network = pk_network_new ();
-#endif
 	backend->priv->eulas = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 	backend->priv->thread_hash = g_hash_table_new_full (g_direct_hash,
 							    g_direct_equal,

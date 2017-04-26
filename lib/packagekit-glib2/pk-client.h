@@ -78,6 +78,10 @@ typedef struct _PkClientPrivate		PkClientPrivate;
 typedef struct _PkClient		PkClient;
 typedef struct _PkClientClass		PkClientClass;
 
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(PkClient, g_object_unref)
+#endif
+
 struct _PkClient
 {
 	 GObject		 parent;
@@ -364,6 +368,16 @@ void		 pk_client_repo_remove_async		(PkClient		*client,
 							 PkBitfield		 transaction_flags,
 							 const gchar		*repo_id,
 							 gboolean		 autoremove,
+							 GCancellable		*cancellable,
+							 PkProgressCallback	 progress_callback,
+							 gpointer		 progress_user_data,
+							 GAsyncReadyCallback	 callback_ready,
+							 gpointer		 user_data);
+
+void		 pk_client_upgrade_system_async		(PkClient		*client,
+							 PkBitfield		 transaction_flags,
+							 const gchar		*distro_id,
+							 PkUpgradeKindEnum	 upgrade_kind,
 							 GCancellable		*cancellable,
 							 PkProgressCallback	 progress_callback,
 							 gpointer		 progress_user_data,

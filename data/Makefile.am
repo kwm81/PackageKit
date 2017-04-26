@@ -27,7 +27,10 @@ systemdservice_in_files =				\
 
 if HAVE_SYSTEMD
 systemdservicedir       = $(systemdsystemunitdir)
-systemdservice_DATA     = $(systemdservice_in_files:.service.in=.service)
+systemdservice_DATA	= packagekit.service
+if ENABLE_OFFLINE_UPDATE
+systemdservice_DATA	+= packagekit-offline-update.service
+endif
 endif
 
 
@@ -40,7 +43,7 @@ install-data-hook:
 		echo "Remove global read access for: $(DESTDIR)$(localstatedir)/lib/PackageKit/$$file"; \
 		chmod o-r $(DESTDIR)$(localstatedir)/lib/PackageKit/$$file; \
 	done
-if HAVE_SYSTEMD
+if ENABLE_OFFLINE_UPDATE
 	mkdir -p $(DESTDIR)$(systemdservicedir)/system-update.target.wants
 	ln -sf ../packagekit-offline-update.service $(DESTDIR)$(systemdservicedir)/system-update.target.wants/packagekit-offline-update.service
 endif

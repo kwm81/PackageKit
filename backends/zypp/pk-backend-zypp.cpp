@@ -76,7 +76,6 @@
 #include <zypp/base/LogControl.h>
 #include <zypp/base/Logger.h>
 #include <zypp/base/String.h>
-#include <zypp/media/MediaManager.h>
 #include <zypp/parser/IniDict.h>
 #include <zypp/parser/ParseException.h>
 #include <zypp/parser/ProductFileReader.h>
@@ -119,6 +118,13 @@ enum PkgSearchType {
 	SEARCH_TYPE_RESOLVE = 3
 };
 
+/** Details about the kind of content returned by zypp_get_patches. */
+enum class SelfUpdate {
+  kNo,				///< applicable patches (no ZYPP stack update)
+  kYes,				///< a ZYPP stack update (must be applied first)
+  kYesAndShaddowsSecurity	///< a ZYPP stack update is shadowing applicable security patches
+};
+
 /// \class PoolStatusSaver
 /// \brief Helper to restore the pool status after doing operations on it.
 ///
@@ -142,10 +148,6 @@ public:
  * FIXME
  */
 gchar * _repoName;
-/** Used to show/install only an update to ourself. This way if we find a critical bug
- * in the way we update packages we will install the fix before any other updates.
- */
-gboolean _updating_self = FALSE;
 
 /* We need to track the number of packages to download in global scope */
 guint _dl_count = 0;
@@ -273,7 +275,7 @@ struct InstallResolvableReportReceiver : public zypp::callback::ReceiveReport<zy
 	}
 
 	virtual Action problem (zypp::Resolvable::constPtr resolvable, Error error, const std::string &description, RpmLevel level) {
-		pk_backend_job_error_code (_job, PK_ERROR_ENUM_PACKAGE_FAILED_TO_INSTALL, description.c_str ());
+		pk_backend_job_error_code (_job, PK_ERROR_ENUM_PACKAGE_FAILED_TO_INSTALL, "%s", description.c_str ());
 		return ABORT;
 	}
 
@@ -308,7 +310,7 @@ struct RemoveResolvableReportReceiver : public zypp::callback::ReceiveReport<zyp
 	}
 
 	virtual Action problem (zypp::Resolvable::constPtr resolvable, Error error, const std::string &description) {
-                pk_backend_job_error_code (_job, PK_ERROR_ENUM_CANNOT_REMOVE_SYSTEM_PACKAGE, description.c_str ());
+                pk_backend_job_error_code (_job, PK_ERROR_ENUM_CANNOT_REMOVE_SYSTEM_PACKAGE, "%s", description.c_str ());
 		return ABORT;
 	}
 
@@ -407,7 +409,7 @@ struct MediaChangeReportReceiver : public zypp::callback::ReceiveReport<zypp::me
 {
 	virtual Action requestMedia (zypp::Url &url, unsigned mediaNr, const std::string &label, zypp::media::MediaChangeReport::Error error, const std::string &description, const std::vector<std::string> & devices, unsigned int &dev_current)
 	{
-		pk_backend_job_error_code (_job, PK_ERROR_ENUM_REPO_NOT_AVAILABLE, description.c_str ());
+		pk_backend_job_error_code (_job, PK_ERROR_ENUM_REPO_NOT_AVAILABLE, "%s", description.c_str ());
 		// We've to abort here, because there is currently no feasible way to inform the user to insert/change media
 		return ABORT;
 	}
@@ -597,10 +599,10 @@ ZyppJob::get_zypp()
 			initialized = TRUE;
 		}
 	} catch (const ZYppFactoryException &ex) {
-		pk_backend_job_error_code (priv->currentJob, PK_ERROR_ENUM_FAILED_INITIALIZATION, ex.asUserString().c_str() );
+		pk_backend_job_error_code (priv->currentJob, PK_ERROR_ENUM_FAILED_INITIALIZATION, "%s", ex.asUserString().c_str() );
 		return NULL;
 	} catch (const Exception &ex) {
-		pk_backend_job_error_code (priv->currentJob, PK_ERROR_ENUM_INTERNAL_ERROR, ex.asUserString().c_str() );
+		pk_backend_job_error_code (priv->currentJob, PK_ERROR_ENUM_INTERNAL_ERROR, "%s", ex.asUserString().c_str() );
 		return NULL;
 	}
 
@@ -636,22 +638,6 @@ zypp_logging ()
 	g_free (file_old);
 
 	return TRUE;
-}
-
-gboolean
-zypp_is_changeable_media (const Url &url)
-{
-	gboolean is_cd = false;
-	try {
-		media::MediaManager mm;
-		media::MediaAccessId id = mm.open (url);
-		is_cd = mm.isChangeable (id);
-		mm.close (id);
-	} catch (const media::MediaException &e) {
-		// TODO: Do anything about this?
-	}
-
-	return is_cd;
 }
 
 namespace {
@@ -966,7 +952,7 @@ zypp_get_Repository (PkBackendJob *job, const gchar *alias)
 		RepoManager manager;
 		info = manager.getRepositoryInfo (alias);
 	} catch (const repo::RepoNotFoundException &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, ex.asUserString().c_str() );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, "%s", ex.asUserString().c_str() );
 		return RepoInfo ();
 	}
 
@@ -1020,13 +1006,6 @@ zypp_refresh_meta_and_cache (RepoManager &manager, RepoInfo &repo, bool force = 
 	}
 }
 
-
-static gboolean
-system_and_package_are_x86 (sat::Solvable item)
-{
-	// i586, i686, ... all should be considered the same arch for our comparison
-	return ( item.arch() == Arch_i586 && ZConfig::defaultSystemArchitecture() == Arch_i686 );
-}
 
 static gboolean
 zypp_package_is_devel (const sat::Solvable &item)
@@ -1083,13 +1062,12 @@ zypp_filter_solvable (PkBitfield filters, const sat::Solvable &item)
 			return TRUE;
 		if (i == PK_FILTER_ENUM_ARCH) {
 			if (item.arch () != ZConfig::defaultSystemArchitecture () &&
-			    item.arch () != Arch_noarch &&
-			    ! system_and_package_are_x86 (item))
+			    item.arch () != "noarch")
 				return TRUE;
 		}
 		if (i == PK_FILTER_ENUM_NOT_ARCH) {
 			if (item.arch () == ZConfig::defaultSystemArchitecture () ||
-			    system_and_package_are_x86 (item))
+			    item.arch () == "noarch")
 				return TRUE;
 		}
 		if (i == PK_FILTER_ENUM_SOURCE && !(isKind<SrcPackage>(item)))
@@ -1202,12 +1180,15 @@ zypp_get_package_updates (string repo, set<PoolItem> &pks)
 }
 
 /**
- * Returns a set of all patches the could be installed
+ * Returns a set of all patches the could be installed.
+ * An applicable ZYPP stack update will shadow all other updates (must be installed
+ * first). Check for shadowed security updates.
  */
-static void
+static SelfUpdate
 zypp_get_patches (PkBackendJob *job, ZYpp::Ptr zypp, set<PoolItem> &patches)
 {
-	_updating_self = FALSE;
+	SelfUpdate detail = SelfUpdate::kNo;
+	bool sawSecurityPatch = false;
 	
 	zypp->resolver ()->setIgnoreAlreadyRecommended (TRUE);
 	zypp->resolver ()->resolvePool ();
@@ -1217,7 +1198,11 @@ zypp_get_patches (PkBackendJob *job, ZYpp::Ptr zypp, set<PoolItem> &patches)
 		// check if the patch is needed and not set to taboo
 		if((*it)->isNeeded() && !((*it)->candidateObj ().isUnwanted())) {
 			Patch::constPtr patch = asKind<Patch>((*it)->candidateObj ().resolvable ());
-			if (_updating_self) {
+			if (!sawSecurityPatch && patch->isCategory(Patch::CAT_SECURITY)) {
+				sawSecurityPatch = true;
+			}
+
+			if (detail == SelfUpdate::kYes) {
 				if (patch->restartSuggested ())
 					patches.insert ((*it)->candidateObj ());
 			}
@@ -1225,28 +1210,33 @@ zypp_get_patches (PkBackendJob *job, ZYpp::Ptr zypp, set<PoolItem> &patches)
 				patches.insert ((*it)->candidateObj ());
 
 			// check if the patch updates libzypp or packageKit and show only these
-			if (!_updating_self && patch->restartSuggested ()) {
-				_updating_self = TRUE;
+			if (patch->restartSuggested () && detail == SelfUpdate::kNo) {
+				detail = SelfUpdate::kYes;
 				patches.clear ();
 				patches.insert ((*it)->candidateObj ());
 			}
 		}
 
 	}
+
+	if (detail == SelfUpdate::kYes && sawSecurityPatch) {
+		detail = SelfUpdate::kYesAndShaddowsSecurity;
+	}
+	return detail;
 }
 
 /**
   * Return the best, most friendly selection of update patches and packages that
-  * we can find. Also manages _updating_self to prioritise critical infrastructure
+  * we can find. Also manages SelfUpdate to prioritise critical infrastructure
   * updates.
   */
-static void
+static SelfUpdate
 zypp_get_updates (PkBackendJob *job, ZYpp::Ptr zypp, set<PoolItem> &candidates)
 {
 	typedef set<PoolItem>::iterator pi_it_t;
-	zypp_get_patches (job, zypp, candidates);
+	SelfUpdate detail = zypp_get_patches (job, zypp, candidates);
 
-	if (!_updating_self) {
+	if (detail == SelfUpdate::kNo) {
 		// exclude the patch-repository
 		string patchRepo;
 		if (!candidates.empty ()) {
@@ -1302,6 +1292,7 @@ zypp_get_updates (PkBackendJob *job, ZYpp::Ptr zypp, set<PoolItem> &candidates)
 			candidates.insert (packages.begin (), packages.end ());
 		}
 	}
+	return detail;
 }
 
 /**
@@ -1318,7 +1309,9 @@ zypp_check_restart (PkRestartEnum *restart, Patch::constPtr patch)
 	    ( patch->reloginSuggested () ||
 	      patch->restartSuggested () ||
 	      patch->rebootSuggested ()) ) {
-		if (patch->reloginSuggested () || patch->restartSuggested ())
+		if (patch->restartSuggested ())
+			*restart = PK_RESTART_ENUM_APPLICATION;
+		if (patch->reloginSuggested ())
 			*restart = PK_RESTART_ENUM_SESSION;
 		if (patch->rebootSuggested ())
 			*restart = PK_RESTART_ENUM_SYSTEM;
@@ -1411,7 +1404,7 @@ zypp_perform_execution (PkBackendJob *job, ZYpp::Ptr zypp, PerformType type, gbo
 					it->statusReset ();
 			}
 
-			pk_backend_job_error_code (job, PK_ERROR_ENUM_DEP_RESOLUTION_FAILED, emsg);
+			pk_backend_job_error_code (job, PK_ERROR_ENUM_DEP_RESOLUTION_FAILED, "%s", emsg);
 			g_free (emsg);
 
 			goto exit;
@@ -1538,11 +1531,11 @@ zypp_perform_execution (PkBackendJob *job, ZYpp::Ptr zypp, PerformType type, gbo
 		pk_backend_job_set_percentage(job, 100);
 		ret = TRUE;
 	} catch (const repo::RepoNotFoundException &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, ex.asUserString().c_str() );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, "%s", ex.asUserString().c_str() );
 	} catch (const target::rpm::RpmException &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_PACKAGE_DOWNLOAD_FAILED, ex.asUserString().c_str () );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_PACKAGE_DOWNLOAD_FAILED, "%s", ex.asUserString().c_str () );
 	} catch (const Exception &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_INTERNAL_ERROR, ex.asUserString().c_str() );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_INTERNAL_ERROR, "%s", ex.asUserString().c_str() );
 	}
 
  exit:
@@ -1601,7 +1594,7 @@ zypp_refresh_cache (PkBackendJob *job, ZYpp::Ptr zypp, gboolean force)
 	catch ( const Exception &e)
 	{
 		// FIXME: make sure this dumps out the right sring.
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, e.asUserString().c_str() );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, "%s", e.asUserString().c_str() );
 		return FALSE;
 	}
 
@@ -1625,9 +1618,9 @@ zypp_refresh_cache (PkBackendJob *job, ZYpp::Ptr zypp, gboolean force)
 		if (!force && !repo.autorefresh())
 			continue;
 
-		// skip changeable meda (DVDs and CDs).  Without doing this,
+		// skip changeable media (DVDs and CDs).  Without doing this,
 		// the disc would be required to be physically present.
-		if (zypp_is_changeable_media (*repo.baseUrlsBegin ()) == true)
+		if (repo.baseUrlsBegin ()->schemeIsVolatile())
 			continue;
 
 		try {
@@ -1651,7 +1644,7 @@ zypp_refresh_cache (PkBackendJob *job, ZYpp::Ptr zypp, gboolean force)
 		pk_backend_job_set_percentage (job, i >= num_of_repos ? 100 : (100 * i) / num_of_repos);
 	}
 	if (repo_messages != NULL)
-		g_printf(repo_messages);
+		g_printf("%s", repo_messages);
 
 	pk_backend_job_set_percentage (job, 100);
 	g_free (repo_messages);
@@ -1725,7 +1718,6 @@ pk_backend_initialize (GKeyFile *conf, PkBackend *backend)
 	zypp_logging ();
 
 	g_debug ("zypp_backend_initialize");
-	//_updating_self = FALSE;
 }
 
 /**
@@ -2233,7 +2225,7 @@ backend_get_updates_thread (PkBackendJob *job, GVariant *params, gpointer user_d
 	pk_backend_job_set_percentage (job, 40);
 
 	set<PoolItem> candidates;
-	zypp_get_updates (job, zypp, candidates);
+	SelfUpdate detail = zypp_get_updates (job, zypp, candidates);
 
 	pk_backend_job_set_percentage (job, 80);
 
@@ -2243,7 +2235,9 @@ backend_get_updates_thread (PkBackendJob *job, GVariant *params, gpointer user_d
 
 		// Emit the package
 		PkInfoEnum infoEnum = PK_INFO_ENUM_ENHANCEMENT;
-		if (isKind<Patch>(res)) {
+		if (detail == SelfUpdate::kYesAndShaddowsSecurity) {
+			infoEnum = PK_INFO_ENUM_SECURITY;	// bsc#951592: raise priority if security patch is shadowed
+		} else if (isKind<Patch>(res)) {
 			Patch::constPtr patch = asKind<Patch>(res);
 			if (patch->category () == "recommended") {
 				infoEnum = PK_INFO_ENUM_BUGFIX;
@@ -2373,7 +2367,7 @@ backend_install_files_thread (PkBackendJob *job, GVariant *params, gpointer user
 	try {
 		manager.removeRepository (tmpRepo);
 	} catch (const repo::RepoNotFoundException &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, ex.asUserString().c_str() );
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_REPO_NOT_FOUND, "%s", ex.asUserString().c_str() );
 	}
 }
 
@@ -2411,6 +2405,12 @@ backend_get_update_detail_thread (PkBackendJob *job, GVariant *params, gpointer 
 	for (uint i = 0; package_ids[i]; i++) {
 		sat::Solvable solvable = zypp_get_package_by_id (package_ids[i]);
 		MIL << package_ids[i] << " " << solvable << endl;
+		if (!solvable) {
+			// Previously stored package_id no longer matches any solvable.
+			zypp_backend_finished_error (job, PK_ERROR_ENUM_PACKAGE_NOT_FOUND,
+						     "couldn't find package");
+			return;
+		}
 
 		Capabilities obs = solvable.obsoletes ();
 
@@ -3308,7 +3308,7 @@ backend_repo_set_data_thread (PkBackendJob *job, GVariant *params, gpointer user
 	} catch (const repo::RepoException &ex) {
 		pk_backend_job_error_code (job, PK_ERROR_ENUM_INTERNAL_ERROR, "Can't access the given URL");
 	} catch (const Exception &ex) {
-		pk_backend_job_error_code (job, PK_ERROR_ENUM_INTERNAL_ERROR, ex.asString ().c_str ());
+		pk_backend_job_error_code (job, PK_ERROR_ENUM_INTERNAL_ERROR, "%s", ex.asString ().c_str ());
 	}
 }
 
@@ -3556,14 +3556,14 @@ pk_backend_download_packages (PkBackend *backend, PkBackendJob *job, gchar **pac
 void
 pk_backend_start_job (PkBackend *backend, PkBackendJob *job)
 {
-	gchar *locale;
-	gchar *proxy_http;
-	gchar *proxy_https;
-	gchar *proxy_ftp;
+	const gchar *locale;
+	const gchar *proxy_http;
+	const gchar *proxy_https;
+	const gchar *proxy_ftp;
+	const gchar *proxy_socks;
+	const gchar *no_proxy;
+	const gchar *pac;
 	gchar *uri;
-	gchar *proxy_socks;
-	gchar *no_proxy;
-	gchar *pac;
 
 	locale = pk_backend_job_get_locale(job);
 	if (!pk_strzero (locale)) {
@@ -3615,14 +3615,6 @@ pk_backend_start_job (PkBackend *backend, PkBackendJob *job)
 		g_setenv ("pac", uri, TRUE);
 		g_free (uri);
 	}
-
-	g_free (locale);
-	g_free (proxy_http);
-	g_free (proxy_https);
-	g_free (proxy_ftp);
-	g_free (proxy_socks);
-	g_free (no_proxy);
-	g_free (pac);
 }
 
 /**

@@ -1,3 +1,293 @@
+Version 1.1.5
+~~~~~~~~~~~~~~
+Released: 2017-01-17
+
+Notes:
+ - This release removes the hif backend which is superseded by the new dnf
+   backend (Kalev Lember)
+
+Backends:
+ - alpm: Get alpm backend warnings on the syslog() (Aleix Pol)
+ - aptcc: handle updates distinct from installs (Harald Sitter)
+ - aptcc: make toinstall more apt compliant (Harald Sitter)
+ - aptcc: exclude held packages from update list (Harald Sitter)
+ - aptcc: Update for new programming language sections (Josh Triplett)
+ - aptcc: fix ac_compile_ifelse (tintou)
+ - katja: pk-backend-katja -> C++14 (Eugen Wissner)
+ - katja: Add classes for the main repository types (Eugen Wissner)
+ - katja: Add explicit casting (Eugen Wissner)
+ - katja: Enable logging in the backend (Eugen Wissner)
+ - katja: Link with glibmm (Eugen Wissner)
+ - katja: Rewrite katja_pkg_is_installed in C++ (Eugen Wissner)
+ - katja: Switch to gobject properties (Eugen Wissner)
+ - katja: Fix libpcre segmentation fault (Eugen Wissner)
+
+Bugfixes:
+ - Fix redeclaration of polkit autocleanup functions (Philip Withnall)
+ - Check for a zero-length search string before passing to backends (Richard Hughes)
+ - command-not-found: Ignore commands of only one character (Richard Hughes)
+
+Version 1.1.4
+~~~~~~~~~~~~~~
+Released: 2016-09-19
+
+Backends:
+ - aptcc: Add get-files-local support (Daniel Nicoletti)
+ - aptcc: Add support for pk_backend_get_details_local (Daniel Nicoletti)
+ - aptcc: Add support for searching for relative paths (Daniel Nicoletti)
+ - aptcc: Convert a few more loops to C++11 range for (Daniel Nicoletti)
+ - aptcc: Drop DebFile helper class (Matthias Klumpp)
+ - aptcc: Fix locating package which a file list belongs to (Daniel Nicoletti)
+ - aptcc: Fix NULL assertion warning (Daniel Nicoletti)
+ - aptcc: Fix typo (Daniel Nicoletti)
+ - aptcc: Install local files using APT API (Daniel Nicoletti)
+ - aptcc: Update pk-matrix for GetDetailsLocal (Daniel Nicoletti)
+ - aptcc: Use C++11 range for loops (Daniel Nicoletti)
+ - aptcc: Use FindGrp instead of manual matching every package when resolving (Daniel Nicoletti)
+ - apt: Remove reference from pk-matrix.html (Daniel Nicoletti)
+ - dnf: Port from libhif to libdnf (Kalev Lember)
+ - hif/dnf: Fix a tiny memory leak when installing packages (Kalev Lember)
+ - hif/dnf: Fix a tiny memory leak when invalidating repo cache (Kalev Lember)
+ - zypp: pass the patch "Application Restart Suggested" flag down to PK (Dominique Leuenberger)
+ - zypp: Return error if invalid package IDs are detected (Michael Andres)
+
+New Features:
+ - Add a new DNF backend (Kalev Lember)
+ - Use GetFilesLocal in pkcon get-files if argument is a file (Daniel Nicoletti)
+
+Bugfixes:
+ - Add a new REPO_ALREADY_SET error enum and use it in backends (Kalev Lember)
+ - Annotate PreparedUpgrade DBus property for usage in PackageKit-Qt (Dominique Leuenberger)
+ - Change the configuration of the cron script to a sysconfig-like config (Dominique Leuenberger)
+ - Do not try to exec plymouth if it is not installed (Richard Hughes)
+ - Don't crash when emitting PropertiesChanged for NULL values (Kalev Lember)
+ - Fix a leak in get_prepared_sack() (Kalev Lember)
+ - Fix a tiny memory leak on error path (Kalev Lember)
+ - Fix a tiny memory leak when setting a proxy (Kalev Lember)
+ - Fix "cache-age changed to -1" debug message (when cache-age is G_MAXUINT) (Alan Jenkins)
+ - Fix two small memory leaks when processing signals from the daemon (Richard Hughes)
+ - Fix updates and change code to aid in not breaking this again (#149) (Harald Sitter)
+ - Fix various g_variant_get ^a&s leaks (Kalev Lember)
+ - Invalidate PreparedUpgrade property when the prepared file changes (Kalev Lember)
+ - Look for command-not-found dbus socket in /run instead of /var/run (Dominique Leuenberger)
+ - Remove declaration of non-existent pk_task_{get,set}_interactive() (Alan Jenkins)
+
+Version 1.1.3
+~~~~~~~~~~~~~~
+Released: 2016-07-14
+
+Bugfixes:
+ - backend job: Avoid emitting duplicates with parallel download (Kalev Lember)
+ - Revert a patch that caused PackageKit to always request auth when installing packages (Kalev Lember)
+ - Update the GPLv2 text in COPYING (Kalev Lember)
+
+Backends:
+ - zypp: PK_FILTER_ENUM_ARCH is supposed to filter on primary arch (Dominique Leuenberger)
+
+Version 1.1.2
+~~~~~~~~~~~~~~
+Released: 2016-07-12
+
+Notes:
+ - This release adds a new backend for the Nix package manager (Matthew Bauer)
+
+New Features:
+ - Add a test for offline distro upgrades (Kalev Lember)
+ - Add PreparedUpgrade DBus property (Kalev Lember)
+
+Bugfixes:
+ - Make pk_console_get_prompt() big endian safe (Richard Hughes)
+ - Require admin authorisation to trigger a distro upgrade (Richard Hughes)
+ - build: Avoid g_simple_async_result deprecation warnings (Kalev Lember)
+ - task: Fix only-trusted property notifications (Kalev Lember)
+ - task: Honour the only_trusted property when setting up transactions (Kalev Lember)
+
+Backends:
+ - alpm: Don't discard a resolve call just because one package is missing (Aleix Pol)
+ - alpm: Ignore the "Usage" key instead of crashing (Dustin Falgout)
+ - aptcc: Fix mimetype list (Harald Sitter)
+ - aptcc: Return the correct and complete result for package origins (Matthias Klumpp)
+ - hif: Add support for build-time vendor configurations (Neal Gompa)
+ - hif: Don't leak a dup'd string in get_author/get_description (Kalev Lember)
+ - hif: Don't set user action when installing / updating packages (Kalev Lember)
+ - hif: Drop ifdefs for older hawkey versions (Kalev Lember)
+ - hif: Match unavailable packages for the what-provides query (Kalev Lember)
+ - hif: Set the installonly limit one higher than usual for system upgrades (Kalev Lember)
+ - hif: Use new libhif API to run a test transaction for offline updates (Kalev Lember)
+ - katja: Fix return type warnings (Eugen Wissner)
+
+Version 1.1.1
+~~~~~~~~~~~~~~
+Released: 2016-04-20
+
+Backends:
+ - alpm: port to g_autoptr() (Christian Hesse)
+ - hif: Set ALLOW_DOWNGRADE flag for all transactions (Kalev Lember)
+ - zypp: Enforce formatting input as string (Neal Gompa)
+
+New Features:
+ - Add UpdateTriggered / UpgradeTriggered DBus properties (Kalev Lember)
+ - Add TriggerUpgrade DBus method handling (Kalev Lember)
+
+Bugfixes:
+ - Emit UpdatesChanges when installing packages (Richard Hughes)
+ - Fix GIR annotations for progress callbacks (Matthias Klumpp)
+ - Increase the number of packages that can be resolved (Richard Hughes)
+ - Point offline update/upgrade trigger to the prepared update (Kalev Lember)
+ - Unlink any existing offline update triggers before creating (Kalev Lember)
+
+Version 1.1.0
+~~~~~~~~~~~~~~
+Released: 2016-02-12
+
+Backends:
+ - alpm: Update for pacman 5.x API change (Christian Hesse)
+ - alpm: Remove versioning support (Christian Hesse)
+ - aptcc: Always append the repository name to the pkgid data (Matthias Klumpp)
+ - aptcc: Always use "installed" as data when the pkg is installed (Matthias Klumpp)
+ - aptcc: Do not use deprecated API (Matthias Klumpp)
+ - aptcc: Require C++11 support (Matthias Klumpp)
+ - aptcc: Store "packagekit role='%s'" as the apt cmdline (Michael Vogt)
+ - hif: Add support for UpgradeSystem (Kalev Lember)
+ - hif: Don't store repos in global data (Kalev Lember)
+ - hif: Factor out pk_backend_job_set_context (Kalev Lember)
+ - hif: Factor out pk_backend_setup_hif_context() (Kalev Lember)
+ - hif: Save cache files in versioned directories (Kalev Lember)
+ - hif: Save release ver in sack cache hash key (Kalev Lember)
+ - hif: Split out UpgradeSystem handling to a separate function (Kalev Lember)
+ - hif: Store the currently used HifContext in job private data (Kalev Lember)
+ - zypp: Avoid media access when testing for cd/dvd URL scheme (Michael Andres)
+ - zypp: Fix build (Dominique Leuenberger)
+ - zypp: Use libzypp's arch compatibility check (Thomas Perl)
+
+New Features:
+ - Add client side API for triggering offline system upgrades (Kalev Lember)
+ - Add getters for PkProgress (Robert Ancell)
+ - Add pk_get_distro_version_id (Kalev Lember)
+ - Add system upgrade API to PkTask (Kalev Lember)
+ - Port to g_autoptr() (Richard Hughes, Kalev Lember)
+ - Remove the PackageKit browser plugin (Richard Hughes)
+ - Use the GLib network monitoring support (Richard Hughes)
+
+Bugfixes:
+ - Add missing description for obsoleted packages (Kalev Lember)
+ - Add support for offline system upgrades (Kalev Lember)
+ - Allow to enable or disable systemd units for offline update (Christian Hesse)
+ - Correctly store file descriptor from logind (#94070) (Benjamin Berg)
+ - Do not crash on GetPrepared when there are no offline updates (Rui Matos)
+ - Do not crash on transaction database corruption (Richard Hughes)
+ - Do not crash when parsing a very broken transaction log (Richard Hughes)
+ - Do not install offline update related files if disabled (Christian Hesse)
+ - Emit PropertiesChanged for UpgradeSystem transaction flags (Kalev Lember)
+ - Fix download-size-remaining property type (Robert Ancell)
+ - Fix various minor memory leaks (Matthias Klumpp)
+ - Make transaction get_proxy() return TRUE for no proxy settings (Matthias Klumpp)
+ - Minor fixes in command_not_found_handle{,r}() for bash and zsh (Carsten Hey)
+ - Relax validation performed on input strings passed to backends (Richard Hughes)
+ - Require dbus.socket for offline update (Christian Hesse)
+ - Set PACKAGEKIT_CALLER_UID environment (Michael Vogt)
+ - Sort package names when printing out simulation (Kalev Lember)
+ - Use new PkTask API for system upgrades (Kalev Lember)
+
+Version 1.0.11
+~~~~~~~~~~~~~~
+Released: 2015-11-27
+
+Notes:
+ - By popular demand, reintroduce the UpgradeSystem method (Richard Hughes)
+
+Backends:
+ - aptcc: Compile with APT 1.1 (Matthias Klumpp)
+ - aptcc: Create really random temporary directories (Matthias Klumpp)
+ - aptcc: Ensure proxy and frontend-socket aren't used if they are NULL (Matthias Klumpp)
+ - aptcc: Fix comment spelling mistakes (Robert Ancell)
+ - aptcc: Fix formatting and kill some old cruft (Matthias Klumpp)
+ - aptcc: Fix several compiler warnings (Matthias Klumpp)
+ - aptcc: Make use of the new APT-internal method for fetching changelogs (Matthias Klumpp)
+ - aptcc: Remove dead code and make source filenames consistent (Matthias Klumpp)
+ - alpm: Make pk_alpm_pkg_build_list() more resiliant to failure (Richard Hughes)
+ - dummy: Implement simulating UpgradeSystem and respect the transaction flags (Richard Hughes)
+ - hif: Add support for HTTP proxy (Marek Marczykowski-Górecki)
+ - hif: Improve RefreshCache progress updates (Kalev Lember)
+ - portage: add helper to change portage settings (Gilles Dartiguelongue)
+ - portage: cosmetics (Gilles Dartiguelongue)
+ - portage: do not redefine builtin license (Gilles Dartiguelongue)
+ - portage: do not refetch package listing for no reason (Gilles Dartiguelongue)
+ - portage: drop unused imports (Gilles Dartiguelongue)
+ - portage: enhance get_repo_list function (Gilles Dartiguelongue)
+ - portage: fix a typo (Gilles Dartiguelongue)
+ - portage: fix a typo in restoring license settings (Gilles Dartiguelongue)
+ - portage: fix exception handling to be python2.7+ compatible (Gilles Dartiguelongue)
+ - portage: fix step percentage computation (Gilles Dartiguelongue)
+ - portage: fix typo python backend detection (Gilles Dartiguelongue)
+ - portage: initialize licenses variable (Gilles Dartiguelongue)
+ - portage: remove compatibility with older portage (Gilles Dartiguelongue)
+ - portage: remove useless instruction (Gilles Dartiguelongue)
+ - portage: retrieve EAPI and KEYWORDS before calling setcpv method (Gilles Dartiguelongue)
+ - portage: simplify _get_cpv_slotted with collections module (Gilles Dartiguelongue)
+ - portage: simplify _get_metadata (Gilles Dartiguelongue)
+ - portage: sort imports according to PEP8 (Gilles Dartiguelongue)
+ - portage: update layman API usage to >=2 (Gilles Dartiguelongue)
+ - portage: use PackageKitProgress to ease progress steps manipulations (Gilles Dartiguelongue)
+ - portage: use PackagekitProgress as an iterable (Gilles Dartiguelongue)
+ - portage: use python idioms (Gilles Dartiguelongue)
+ - python: make PackagekitProgress an Iterable (Gilles Dartiguelongue)
+ - python: set steps on PackagekitProgress instanciation (Gilles Dartiguelongue)
+ - zypp: Raise priority of ZYPP stack updates if a security patch is shadowed (bsc#951592) (Michael Andres)
+
+New Features:
+ - Allow the use of variadic functions in vala (Corentin Noël)
+
+Bugfixes:
+ - Make pk_details_get_size documentation more specific (Aleix Pol)
+
+Version 1.0.10
+~~~~~~~~~~~~~~
+Released: 2015-09-21
+
+Bugfixes:
+ - Process the offline update triggered by older PK versions (Kalev Lember)
+ - Use Glib for reading symlink to prevent crash with some compilers (Kalev Lember)
+
+Version 1.0.9
+~~~~~~~~~~~~~
+Released: 2015-09-15
+
+Backends:
+ - aptcc: Don't assume time_t is same as long (Adam Borowski)
+
+New Features:
+ - Support g_autoptr() for all packagekit-glib2 object types (Kalev Lember)
+
+Bugfixes:
+ - Check the offline action trigger before performing the update (Richard Hughes)
+ - Fix two critical warnings (Richard Hughes)
+ - Sdd PackageKitGlib-1.0.metadata to release tarball (Christian Hesse)
+ - Fix a race with the backend job thread creation (Kalev Lember)
+
+Version 1.0.8
+~~~~~~~~~~~~~
+Released: 2015-08-19
+
+Backends:
+ - hif: Record the UID of the session user in the yumdb (Richard Hughes)
+ - urpmi: Add support for FILTER_ARCH (Thierry Vignaud)
+ - urpmi: Enable newer filters by default (Thierry Vignaud)
+ - urpmi: Implement install_files (Thierry Vignaud)
+ - urpmi: Other distros have synced their urpm API with mga (Thierry Vignaud)
+ - urpmi: Support the NOT filter variants too (Thierry Vignaud)
+ - yum: Add support for GetDetailsLocal (Richard Hughes)
+ - yum: Record the UID of the session user in the yumdb (Richard Hughes)
+
+New Features:
+ - Generate Vala bindings (Robert Ancell)
+
+Bugfixes:
+ - Correctly register enum properties (Robert Ancell)
+ - Exit quietly if we didn't prepare the offline update (Will Woods)
+ - Fix various docstring errors in the library (Robert Ancell)
+ - Look for libsystemd now that journal/login are merged (Matthias Klumpp)
+
 Version 1.0.7
 ~~~~~~~~~~~~~
 Released: 2015-07-13

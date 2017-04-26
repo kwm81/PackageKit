@@ -21,12 +21,11 @@
 #ifndef ACQ_PKIT_STATUS_H
 #define ACQ_PKIT_STATUS_H
 
-#include <apt-pkg/acquire.h>
+#include <set>
+#include <apt-pkg/acquire-item.h>
 #include <pk-backend.h>
 
-#include "PkgList.h"
-
-#include <set>
+#include "pkg-list.h"
 
 using std::set;
 
@@ -54,6 +53,13 @@ private:
     unsigned long m_lastPercent;
     double        m_lastCPS;
     AptIntf       *m_apt;
+};
+
+class pkgAcqArchiveSane : public pkgAcqArchive
+{
+public:
+    // This is insane the version is protected
+    pkgCache::VerIterator version() { return Version; }
 };
 
 #endif

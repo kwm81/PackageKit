@@ -28,7 +28,6 @@
 
 #include <packagekit-glib2/pk-results.h>
 
-#include "pk-cleanup.h"
 #include "pk-backend.h"
 #include "pk-backend-job.h"
 #include "pk-shared.h"
@@ -86,7 +85,6 @@ struct PkBackendJobPrivate
 	gchar			*proxy_https;
 	gchar			*proxy_socks;
 	gpointer		 user_data;
-	GThread			*thread;
 	guint64			 download_size_remaining;
 	guint			 cache_age;
 	guint			 download_files;
@@ -105,7 +103,7 @@ struct PkBackendJobPrivate
 	gboolean		 background;
 	gboolean		 interactive;
 	gboolean		 locked;
-	PkPackage		*last_package;
+	GHashTable		*emitted;
 	PkErrorEnum		 last_error_code;
 	PkRoleEnum		 role;
 	PkStatusEnum		 status;
@@ -259,11 +257,11 @@ pk_backend_job_set_proxy (PkBackendJob	*job,
  *
  * Return value: proxy string in the form username:password@server:port
  **/
-gchar *
+const gchar *
 pk_backend_job_get_proxy_http (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->proxy_http);
+	return job->priv->proxy_http;
 }
 
 /**
@@ -271,11 +269,11 @@ pk_backend_job_get_proxy_http (PkBackendJob *job)
  *
  * Return value: proxy string in the form username:password@server:port
  **/
-gchar *
+const gchar *
 pk_backend_job_get_proxy_https (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->proxy_https);
+	return job->priv->proxy_https;
 }
 
 /**
@@ -283,11 +281,11 @@ pk_backend_job_get_proxy_https (PkBackendJob *job)
  *
  * Return value: proxy string in the form username:password@server:port
  **/
-gchar *
+const gchar *
 pk_backend_job_get_proxy_ftp (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->proxy_ftp);
+	return job->priv->proxy_ftp;
 }
 
 /**
@@ -295,11 +293,11 @@ pk_backend_job_get_proxy_ftp (PkBackendJob *job)
  *
  * Return value: proxy string in the form username:password@server:port
  **/
-gchar *
+const gchar *
 pk_backend_job_get_proxy_socks (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->proxy_socks);
+	return job->priv->proxy_socks;
 }
 
 /**
@@ -307,11 +305,11 @@ pk_backend_job_get_proxy_socks (PkBackendJob *job)
  *
  * Return value: comma seporated value of proxy exlude string
  **/
-gchar *
+const gchar *
 pk_backend_job_get_no_proxy (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->no_proxy);
+	return job->priv->no_proxy;
 }
 
 /**
@@ -319,11 +317,11 @@ pk_backend_job_get_no_proxy (PkBackendJob *job)
  *
  * Return value: proxy PAC filename
  **/
-gchar *
+const gchar *
 pk_backend_job_get_pac (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->pac);
+	return job->priv->pac;
 }
 
 /**
@@ -380,11 +378,11 @@ pk_backend_job_get_uid (PkBackendJob *job)
  *
  * Return value: session locale, e.g. en_GB
  **/
-gchar *
+const gchar *
 pk_backend_job_get_locale (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->locale);
+	return job->priv->locale;
 }
 
 /**
@@ -431,11 +429,11 @@ pk_backend_job_set_parameters (PkBackendJob *job, GVariant *params)
  *
  * Return value: session frontend_socket, e.g. /tmp/socket.345
  **/
-gchar *
+const gchar *
 pk_backend_job_get_frontend_socket (PkBackendJob *job)
 {
 	g_return_val_if_fail (PK_IS_BACKEND_JOB (job), NULL);
-	return g_strdup (job->priv->frontend_socket);
+	return job->priv->frontend_socket;
 }
 
 /**
@@ -492,7 +490,7 @@ pk_backend_job_set_cache_age (PkBackendJob *job, guint cache_age)
 	if (cache_age != G_MAXUINT && cache_age > cache_age_offset)
 		cache_age -= cache_age_offset;
 
-	g_debug ("cache-age changed to %i", cache_age);
+	g_debug ("cache-age changed to %u", cache_age);
 	job->priv->cache_age = cache_age;
 }
 
@@ -690,7 +688,7 @@ pk_backend_job_call_vfunc (PkBackendJob *job,
 	PkBackendJobVFuncHelper *helper;
 	PkBackendJobVFuncItem *item;
 	guint priority = G_PRIORITY_DEFAULT_IDLE;
-	_cleanup_source_unref_ GSource *source = NULL;
+	g_autoptr(GSource) source = NULL;
 
 	/* call transaction vfunc if not disabled and set */
 	item = &job->priv->vfunc_items[signal_kind];
@@ -824,10 +822,6 @@ pk_backend_job_thread_setup (gpointer thread_data)
 	}
 #endif
 
-	/* unref the thread here as it holds a reference itself and we do
-	 * not need to join() this at any stage */
-	g_thread_unref (helper->job->priv->thread);
-
 	/* destroy helper */
 	g_object_unref (helper->job);
 	if (helper->destroy_func != NULL)
@@ -854,11 +848,6 @@ pk_backend_job_thread_create (PkBackendJob *job,
 	g_return_val_if_fail (func != NULL, FALSE);
 	g_return_val_if_fail (pk_is_thread_default (), FALSE);
 
-	if (job->priv->thread != NULL) {
-		g_warning ("already has thread");
-		return FALSE;
-	}
-
 	/* create a helper object to allow us to call a _setup() function */
 	helper = g_new0 (PkBackendJobThreadHelper, 1);
 	helper->job = g_object_ref (job);
@@ -866,14 +855,11 @@ pk_backend_job_thread_create (PkBackendJob *job,
 	helper->func = func;
 	helper->user_data = user_data;
 
-	/* create a thread */
-	job->priv->thread = g_thread_new ("PK-Backend",
-					  pk_backend_job_thread_setup,
-					  helper);
-	if (job->priv->thread == NULL) {
-		g_warning ("failed to create thread");
-		return FALSE;
-	}
+	/* create a thread and unref it immediately as we do not need to join()
+	 * this at any stage */
+	g_thread_unref (g_thread_new ("PK-Backend",
+	                              pk_backend_job_thread_setup,
+	                              helper));
 	return TRUE;
 }
 
@@ -1082,9 +1068,10 @@ pk_backend_job_package (PkBackendJob *job,
 			const gchar *package_id,
 			const gchar *summary)
 {
+	PkPackage *emitted_item;
 	gboolean ret;
-	_cleanup_error_free_ GError *error = NULL;
-	_cleanup_object_unref_ PkPackage *item = NULL;
+	g_autoptr(GError) error = NULL;
+	g_autoptr(PkPackage) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (package_id != NULL);
@@ -1100,16 +1087,15 @@ pk_backend_job_package (PkBackendJob *job,
 	pk_package_set_info (item, info);
 	pk_package_set_summary (item, summary);
 
-	/* is it the same? */
-	ret = (job->priv->last_package != NULL &&
-	       pk_package_equal (job->priv->last_package, item));
-	if (ret)
+	/* already emitted? */
+	emitted_item = g_hash_table_lookup (job->priv->emitted, pk_package_get_id (item));
+	if (emitted_item != NULL && pk_package_equal (emitted_item, item))
 		return;
 
-	/* update the 'last' package */
-	if (job->priv->last_package != NULL)
-		g_object_unref (job->priv->last_package);
-	job->priv->last_package = g_object_ref (item);
+	/* update the emitted package table */
+	g_hash_table_insert (job->priv->emitted,
+	                     g_strdup (pk_package_get_id (item)),
+	                     g_object_ref (item));
 
 	/* have we already set an error? */
 	if (job->priv->set_error) {
@@ -1160,7 +1146,7 @@ pk_backend_job_update_detail (PkBackendJob *job,
 			      const gchar *updated_text)
 {
 	GTimeVal timeval;
-	_cleanup_object_unref_ PkUpdateDetail *item = NULL;
+	g_autoptr(PkUpdateDetail) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (package_id != NULL);
@@ -1219,7 +1205,7 @@ pk_backend_job_require_restart (PkBackendJob *job,
 				PkRestartEnum restart,
 				const gchar *package_id)
 {
-	_cleanup_object_unref_ PkRequireRestart *item = NULL;
+	g_autoptr(PkRequireRestart) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 
@@ -1262,7 +1248,7 @@ pk_backend_job_details (PkBackendJob *job,
 			const gchar *url,
 			gulong size)
 {
-	_cleanup_object_unref_ PkDetails *item = NULL;
+	g_autoptr(PkDetails) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (package_id != NULL);
@@ -1302,7 +1288,7 @@ pk_backend_job_files (PkBackendJob *job,
 		      const gchar *package_id,
 		      gchar **files)
 {
-	_cleanup_object_unref_ PkFiles *item = NULL;
+	g_autoptr(PkFiles) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (files != NULL);
@@ -1347,7 +1333,7 @@ pk_backend_job_distro_upgrade (PkBackendJob *job,
 			       const gchar *name,
 			       const gchar *summary)
 {
-	_cleanup_object_unref_ PkDistroUpgrade *item = NULL;
+	g_autoptr(PkDistroUpgrade) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (state != PK_DISTRO_UPGRADE_ENUM_UNKNOWN);
@@ -1389,7 +1375,7 @@ pk_backend_job_repo_signature_required (PkBackendJob *job,
 					const gchar *key_timestamp,
 					PkSigTypeEnum type)
 {
-	_cleanup_object_unref_ PkRepoSignatureRequired *item = NULL;
+	g_autoptr(PkRepoSignatureRequired) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (repository_name != NULL);
@@ -1439,7 +1425,7 @@ pk_backend_job_eula_required (PkBackendJob *job,
 			      const gchar *vendor_name,
 			      const gchar *license_agreement)
 {
-	_cleanup_object_unref_ PkEulaRequired *item = NULL;
+	g_autoptr(PkEulaRequired) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (eula_id != NULL);
@@ -1487,7 +1473,7 @@ pk_backend_job_media_change_required (PkBackendJob *job,
 				      const gchar *media_id,
 				      const gchar *media_text)
 {
-	_cleanup_object_unref_ PkMediaChangeRequired *item = NULL;
+	g_autoptr(PkMediaChangeRequired) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (media_id != NULL);
@@ -1523,7 +1509,7 @@ pk_backend_job_repo_detail (PkBackendJob *job,
 			    const gchar *description,
 			    gboolean enabled)
 {
-	_cleanup_object_unref_ PkRepoDetail *item = NULL;
+	g_autoptr(PkRepoDetail) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (repo_id != NULL);
@@ -1560,7 +1546,7 @@ pk_backend_job_category (PkBackendJob *job,
 			 const gchar *summary,
 			 const gchar *icon)
 {
-	_cleanup_object_unref_ PkCategory *item = NULL;
+	g_autoptr(PkCategory) item = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 	g_return_if_fail (cat_id != NULL);
@@ -1619,8 +1605,8 @@ pk_backend_job_error_code (PkBackendJob *job,
 {
 	va_list args;
 	gboolean need_untrusted;
-	_cleanup_free_ gchar *buffer = NULL;
-	_cleanup_object_unref_ PkError *error = NULL;
+	g_autofree gchar *buffer = NULL;
+	g_autoptr(PkError) error = NULL;
 
 	g_return_if_fail (PK_IS_BACKEND_JOB (job));
 
@@ -1841,10 +1827,7 @@ pk_backend_job_finalize (GObject *object)
 	g_free (job->priv->cmdline);
 	g_free (job->priv->locale);
 	g_free (job->priv->frontend_socket);
-	if (job->priv->last_package != NULL) {
-		g_object_unref (job->priv->last_package);
-		job->priv->last_package = NULL;
-	}
+	g_hash_table_unref (job->priv->emitted);
 	if (job->priv->params != NULL)
 		g_variant_unref (job->priv->params);
 	g_timer_destroy (job->priv->timer);
@@ -1881,6 +1864,8 @@ pk_backend_job_init (PkBackendJob *job)
 	job->priv->exit = PK_EXIT_ENUM_UNKNOWN;
 	job->priv->role = PK_ROLE_ENUM_UNKNOWN;
 	job->priv->status = PK_STATUS_ENUM_UNKNOWN;
+	job->priv->emitted = g_hash_table_new_full (g_str_hash, g_str_equal,
+	                                            g_free, (GDestroyNotify) g_object_unref);
 }
 
 /**

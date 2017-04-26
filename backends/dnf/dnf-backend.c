@@ -24,202 +24,200 @@
 #include <stdlib.h>
 #include <glib.h>
 #include <glib/gstdio.h>
-#include <pk-cleanup.h>
 
-#include <libhif.h>
+#include <libdnf/libdnf.h>
 
-/* allow compiling with older libhif versions */
-#if !HIF_CHECK_VERSION(0,2,0)
-#include <libhif-private.h>
-#endif
-
-#include <hawkey/errno.h>
-
-#include "hif-backend.h"
+#include "dnf-backend.h"
 
 /**
- * hif_emit_package:
+ * dnf_emit_package:
  */
 void
-hif_emit_package (PkBackendJob *job, PkInfoEnum info, HyPackage pkg)
+dnf_emit_package (PkBackendJob *job, PkInfoEnum info, DnfPackage *pkg)
 {
 	/* detect */
 	if (info == PK_INFO_ENUM_UNKNOWN)
-		info = hif_package_get_info (pkg);
+		info = dnf_package_get_info (pkg);
 	if (info == PK_INFO_ENUM_UNKNOWN)
-		info = hy_package_installed (pkg) ? PK_INFO_ENUM_INSTALLED : PK_INFO_ENUM_AVAILABLE;
+		info = dnf_package_installed (pkg) ? PK_INFO_ENUM_INSTALLED : PK_INFO_ENUM_AVAILABLE;
 	pk_backend_job_package (job,
 				info,
-				hif_package_get_id (pkg),
-				hy_package_get_summary (pkg));
+				dnf_package_get_package_id (pkg),
+				dnf_package_get_summary (pkg));
 }
 
 /**
- * hif_emit_package_list:
+ * dnf_emit_package_list:
  */
 void
-hif_emit_package_list (PkBackendJob *job,
+dnf_emit_package_list (PkBackendJob *job,
 		       PkInfoEnum info,
-		       HyPackageList pkglist)
+		       GPtrArray *pkglist)
 {
 	guint i;
-	HyPackage pkg;
+	DnfPackage *pkg;
 
-	FOR_PACKAGELIST(pkg, pkglist, i)
-		hif_emit_package (job, info, pkg);
-}
-
-/**
- * hif_emit_package_array:
- */
-void
-hif_emit_package_array (PkBackendJob *job,
-			 PkInfoEnum info,
-			 GPtrArray *array)
-{
-	guint i;
-	HyPackage pkg;
-
-	for (i = 0; i < array->len; i++) {
-		pkg = g_ptr_array_index (array, i);
-		hif_emit_package (job, info, pkg);
+	for (i = 0; i < pkglist->len; i++) {
+		pkg = g_ptr_array_index (pkglist, i);
+		dnf_emit_package (job, info, pkg);
 	}
 }
 
 /**
- * hif_emit_package_list_filter:
+ * dnf_emit_package_array:
  */
 void
-hif_emit_package_list_filter (PkBackendJob *job,
-			      PkBitfield filters,
-			      HyPackageList pkglist)
+dnf_emit_package_array (PkBackendJob *job,
+			 PkInfoEnum info,
+			 GPtrArray *array)
 {
-	HyPackage found;
-	HyPackage pkg;
 	guint i;
-	_cleanup_hashtable_unref_ GHashTable *hash_cost = NULL;
-	_cleanup_hashtable_unref_ GHashTable *hash_installed = NULL;
+	DnfPackage *pkg;
+
+	for (i = 0; i < array->len; i++) {
+		pkg = g_ptr_array_index (array, i);
+		dnf_emit_package (job, info, pkg);
+	}
+}
+
+/**
+ * dnf_emit_package_list_filter:
+ */
+void
+dnf_emit_package_list_filter (PkBackendJob *job,
+			      PkBitfield filters,
+			      GPtrArray *pkglist)
+{
+	DnfPackage *found;
+	DnfPackage *pkg;
+	guint i;
+	g_autoptr(GHashTable) hash_cost = NULL;
+	g_autoptr(GHashTable) hash_installed = NULL;
 
 	/* if a package exists in multiple repos, show the one with the lowest
 	 * cost of downloading */
 	hash_cost = g_hash_table_new (g_str_hash, g_str_equal);
-	FOR_PACKAGELIST(pkg, pkglist, i) {
-		if (hy_package_installed (pkg))
+	for (i = 0; i < pkglist->len; i++) {
+		pkg = g_ptr_array_index (pkglist, i);
+		if (dnf_package_installed (pkg))
 			continue;
 
 		/* if the NEVRA does not already exist in the array, just add */
 		found = g_hash_table_lookup (hash_cost,
-					     hif_package_get_nevra (pkg));
+					     dnf_package_get_nevra (pkg));
 		if (found == NULL) {
 			g_hash_table_insert (hash_cost,
-					     (gpointer) hif_package_get_nevra (pkg),
+					     (gpointer) dnf_package_get_nevra (pkg),
 					     (gpointer) pkg);
 			continue;
 		}
 
 		/* a lower cost package */
-		if (hif_package_get_cost (pkg) < hif_package_get_cost (found)) {
-			hif_package_set_info (found, PK_INFO_ENUM_BLOCKED);
+		if (dnf_package_get_cost (pkg) < dnf_package_get_cost (found)) {
+			dnf_package_set_info (found, PK_INFO_ENUM_BLOCKED);
 			g_hash_table_replace (hash_cost,
-					      (gpointer) hif_package_get_nevra (pkg),
+					      (gpointer) dnf_package_get_nevra (pkg),
 					      (gpointer) pkg);
 		} else {
-			hif_package_set_info (pkg, PK_INFO_ENUM_BLOCKED);
+			dnf_package_set_info (pkg, PK_INFO_ENUM_BLOCKED);
 		}
 	}
 
 	/* add all the installed packages to a hash */
 	hash_installed = g_hash_table_new (g_str_hash, g_str_equal);
-	FOR_PACKAGELIST(pkg, pkglist, i) {
-		if (!hy_package_installed (pkg))
+	for (i = 0; i < pkglist->len; i++) {
+		pkg = g_ptr_array_index (pkglist, i);
+		if (!dnf_package_installed (pkg))
 			continue;
 		g_hash_table_insert (hash_installed,
-				     (gpointer) hif_package_get_nevra (pkg),
+				     (gpointer) dnf_package_get_nevra (pkg),
 				     (gpointer) pkg);
 	}
 
 	/* anything remote in metadata-only mode needs to be unavailable */
-	FOR_PACKAGELIST(pkg, pkglist, i) {
-		HifSource *src;
-		if (hy_package_installed (pkg))
+	for (i = 0; i < pkglist->len; i++) {
+		DnfRepo *repo;
+		pkg = g_ptr_array_index (pkglist, i);
+		if (dnf_package_installed (pkg))
 			continue;
-		src = hif_package_get_source (pkg);
-		if (src == NULL)
+		repo = dnf_package_get_repo (pkg);
+		if (repo == NULL)
 			continue;
-		if (hif_source_get_enabled (src) != HIF_SOURCE_ENABLED_METADATA)
+		if (dnf_repo_get_enabled (repo) != DNF_REPO_ENABLED_METADATA)
 			continue;
-		hif_package_set_info (pkg, PK_INFO_ENUM_UNAVAILABLE);
+		dnf_package_set_info (pkg, PK_INFO_ENUM_UNAVAILABLE);
 	}
 
-	FOR_PACKAGELIST(pkg, pkglist, i) {
+	for (i = 0; i < pkglist->len; i++) {
+		pkg = g_ptr_array_index (pkglist, i);
 
 		/* blocked */
-		if ((PkInfoEnum) hif_package_get_info (pkg) == PK_INFO_ENUM_BLOCKED)
+		if ((PkInfoEnum) dnf_package_get_info (pkg) == PK_INFO_ENUM_BLOCKED)
 			continue;
 
 		/* GUI */
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_GUI) && !hif_package_is_gui (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_GUI) && !dnf_package_is_gui (pkg))
 			continue;
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_GUI) && hif_package_is_gui (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_GUI) && dnf_package_is_gui (pkg))
 			continue;
 
 		/* DEVELOPMENT */
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_DEVELOPMENT) && !hif_package_is_devel (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_DEVELOPMENT) && !dnf_package_is_devel (pkg))
 			continue;
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_DEVELOPMENT) && hif_package_is_devel (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_DEVELOPMENT) && dnf_package_is_devel (pkg))
 			continue;
 
 		/* DOWNLOADED */
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_DOWNLOADED) && !hif_package_is_downloaded (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_DOWNLOADED) && !dnf_package_is_downloaded (pkg))
 			continue;
-		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_DOWNLOADED) && hif_package_is_downloaded (pkg))
+		if (pk_bitfield_contain (filters, PK_FILTER_ENUM_NOT_DOWNLOADED) && dnf_package_is_downloaded (pkg))
 			continue;
 
 		/* if this package is available and the very same NEVRA is
 		 * installed, skip this package */
-		if (!hy_package_installed (pkg)) {
+		if (!dnf_package_installed (pkg)) {
 			found = g_hash_table_lookup (hash_installed,
-						     hif_package_get_nevra (pkg));
+						     dnf_package_get_nevra (pkg));
 			if (found != NULL)
 				continue;
 		}
 
-		hif_emit_package (job, PK_INFO_ENUM_UNKNOWN, pkg);
+		dnf_emit_package (job, PK_INFO_ENUM_UNKNOWN, pkg);
 	}
 }
 
 /**
- * hif_advisory_type_to_info_enum:
+ * dnf_advisory_kind_to_info_enum:
  */
 PkInfoEnum
-hif_advisory_type_to_info_enum (HyAdvisoryType type)
+dnf_advisory_kind_to_info_enum (DnfAdvisoryKind kind)
 {
 	PkInfoEnum info_enum = PK_INFO_ENUM_UNKNOWN;
-	switch (type) {
-	case HY_ADVISORY_SECURITY:
+	switch (kind) {
+	case DNF_ADVISORY_KIND_SECURITY:
 		info_enum = PK_INFO_ENUM_SECURITY;
 		break;
-	case HY_ADVISORY_BUGFIX:
+	case DNF_ADVISORY_KIND_BUGFIX:
 		info_enum = PK_INFO_ENUM_BUGFIX;
 		break;
-	case HY_ADVISORY_UNKNOWN:
+	case DNF_ADVISORY_KIND_UNKNOWN:
 		info_enum = PK_INFO_ENUM_NORMAL;
 		break;
-	case HY_ADVISORY_ENHANCEMENT:
+	case DNF_ADVISORY_KIND_ENHANCEMENT:
 		info_enum = PK_INFO_ENUM_ENHANCEMENT;
 		break;
 	default:
-		g_warning ("Failed to find HyAdvisoryType enum %i", type);
+		g_warning ("Failed to find DnfAdvisoryKind enum %i", kind);
 		break;
 	}
 	return info_enum;
 }
 
 /**
- * hif_get_filter_for_ids:
+ * dnf_get_filter_for_ids:
  */
 PkBitfield
-hif_get_filter_for_ids (gchar **package_ids)
+dnf_get_filter_for_ids (gchar **package_ids)
 {
 	gboolean available = FALSE;
 	gboolean installed = FALSE;
@@ -227,7 +225,7 @@ hif_get_filter_for_ids (gchar **package_ids)
 	PkBitfield filters = 0;
 
 	for (i = 0; package_ids[i] != NULL && (!installed || !available); i++) {
-		_cleanup_strv_free_ gchar **split = pk_package_id_split (package_ids[i]);
+		g_auto(GStrv) split = pk_package_id_split (package_ids[i]);
 		if (g_strcmp0 (split[PK_PACKAGE_ID_DATA], "installed") == 0)
 			installed = TRUE;
 		else

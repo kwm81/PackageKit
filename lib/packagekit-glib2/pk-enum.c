@@ -125,6 +125,7 @@ static const PkEnumMatch enum_role[] = {
 	{PK_ROLE_ENUM_GET_CATEGORIES,			"get-categories"},
 	{PK_ROLE_ENUM_GET_OLD_TRANSACTIONS,		"get-old-transactions"},
 	{PK_ROLE_ENUM_REPAIR_SYSTEM,			"repair-system"},
+	{PK_ROLE_ENUM_UPGRADE_SYSTEM,			"upgrade-system"},
 	{0, NULL}
 };
 
@@ -197,6 +198,7 @@ static const PkEnumMatch enum_error[] = {
 	{PK_ERROR_ENUM_CANCELLED_PRIORITY,	"cancelled-priority"},
 	{PK_ERROR_ENUM_UNFINISHED_TRANSACTION,	"unfinished-transaction"},
 	{PK_ERROR_ENUM_LOCK_REQUIRED,		"lock-required"},
+	{PK_ERROR_ENUM_REPO_ALREADY_SET,	"repo-already-set"},
 	{0, NULL}
 };
 
@@ -1242,6 +1244,10 @@ pk_role_enum_to_localised_present (PkRoleEnum role)
 	case PK_ROLE_ENUM_GET_OLD_TRANSACTIONS:
 		/* TRANSLATORS: The role of the transaction, in present tense */
 		text = dgettext("PackageKit", "Getting transactions");
+		break;
+	case PK_ROLE_ENUM_UPGRADE_SYSTEM:
+		/* TRANSLATORS: The role of the transaction, in present tense */
+		text = dgettext("PackageKit", "Getting system upgrades");
 		break;
 	default:
 		g_warning ("role unrecognised: %s", pk_role_enum_to_string (role));

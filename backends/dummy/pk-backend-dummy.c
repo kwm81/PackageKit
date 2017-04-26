@@ -543,9 +543,9 @@ pk_backend_get_updates (PkBackend *backend, PkBackendJob *job, PkBitfield filter
 static void
 pk_backend_install_thread (PkBackendJob *job, GVariant *params, gpointer user_data)
 {
-	gchar **package_ids;
 	PkBitfield transaction_flags;
 	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
+	g_autofree gchar **package_ids = NULL;
 
 	g_variant_get (params, "(t^a&s)",
 		       &transaction_flags,
@@ -833,10 +833,10 @@ pk_backend_refresh_cache (PkBackend *backend, PkBackendJob *job, gboolean force)
 static void
 pk_backend_resolve_thread (PkBackendJob *job, GVariant *params, gpointer user_data)
 {
-	gchar **search;
 	guint i;
 	guint len;
 	PkBitfield filters;
+	g_autofree gchar **search = NULL;
 
 	g_variant_get (params, "(t^a&s)",
 		       &filters,
@@ -994,11 +994,11 @@ static void
 pk_backend_search_names_thread (PkBackendJob *job, GVariant *params, gpointer user_data)
 {
 	guint i;
-	gchar *locale;
+	const gchar *locale;
 	PkRoleEnum role;
-	gchar **search;
 	PkBitfield filters;
 	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
+	g_autofree gchar **search = NULL;
 
 	role = pk_backend_job_get_role (job);
 	if (role == PK_ROLE_ENUM_GET_PACKAGES) {
@@ -1062,8 +1062,8 @@ static void
 pk_backend_update_packages_download_thread (PkBackendJob *job, GVariant *params, gpointer user_data)
 {
 	PkBitfield transaction_flags;
-	gchar **package_ids;
 	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
+	g_autofree gchar **package_ids = NULL;
 
 	g_variant_get (params, "(t^a&s)",
 		       &transaction_flags,
@@ -1247,7 +1247,7 @@ pk_backend_socket_has_data_cb (GSocket *socket,
 	gchar buffer[1024];
 	gint wrote = 0;
 	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
-	_cleanup_error_free_ GError *error = NULL;
+	g_autoptr(GError) error = NULL;
 
 	/* the helper process exited */
 	if ((condition & G_IO_HUP) > 0) {
@@ -1314,9 +1314,9 @@ pk_backend_update_packages (PkBackend *backend, PkBackendJob *job, PkBitfield tr
 	GSource *source;
 	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
 	PkRoleEnum role;
-	_cleanup_error_free_ GError *error = NULL;
-	_cleanup_free_ gchar *frontend_socket = NULL;
-	_cleanup_object_unref_ GSocketAddress *address = NULL;
+	g_autoptr(GError) error = NULL;
+	const gchar *frontend_socket = NULL;
+	g_autoptr(GSocketAddress) address = NULL;
 
 	/* FIXME: support only_trusted */
 	role = pk_backend_job_get_role (job);
@@ -1612,6 +1612,80 @@ pk_backend_download_packages (PkBackend *backend, PkBackendJob *job, gchar **pac
 	g_free (filename);
 
 	pk_backend_job_finished (job);
+}
+
+static gboolean
+pk_backend_upgrade_system_timeout (gpointer data)
+{
+	PkBackendJob *job = (PkBackendJob *) data;
+	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
+	PkBitfield transaction_flags;
+
+	transaction_flags = pk_backend_job_get_transaction_flags (job);
+	if (pk_bitfield_contain (transaction_flags, PK_TRANSACTION_FLAG_ENUM_SIMULATE)) {
+		pk_backend_job_package (job, PK_INFO_ENUM_INSTALLING,
+					"gtk2;2.11.6-6.fc8;i386;fedora", "GTK+ Libraries for GIMP");
+		pk_backend_job_package (job, PK_INFO_ENUM_REMOVING,
+					"gnome-software;2.18.2.fc24;i386;fedora", "Software center for GNOME");
+		pk_backend_job_package (job, PK_INFO_ENUM_UPDATING,
+					"lib7;7.0.1-6.fc13;i386;fedora", "C Libraries");
+		pk_backend_job_finished (job);
+		return FALSE;
+	}
+
+	if (job_data->progress_percentage == 100) {
+		pk_backend_job_finished (job);
+		return FALSE;
+	}
+	if (job_data->progress_percentage == 0) {
+		pk_backend_job_set_status (job, PK_STATUS_ENUM_DOWNLOAD_UPDATEINFO);
+	}
+	if (job_data->progress_percentage == 20) {
+		pk_backend_job_package (job, PK_INFO_ENUM_DOWNLOADING,
+					"kernel;2.6.23-0.115.rc3.git1.fc8;i386;installed",
+					"The Linux kernel (the core of the Linux operating system)");
+	}
+	if (job_data->progress_percentage == 30) {
+		pk_backend_job_package (job, PK_INFO_ENUM_DOWNLOADING,
+					"gtkhtml2;2.19.1-4.fc8;i386;fedora",
+					"An HTML widget for GTK+ 2.0");
+	}
+	if (job_data->progress_percentage == 40) {
+		pk_backend_job_set_allow_cancel (job, FALSE);
+		pk_backend_job_package (job, PK_INFO_ENUM_DOWNLOADING,
+					"powertop;1.8-1.fc8;i386;fedora",
+					"Power consumption monitor");
+	}
+	if (job_data->progress_percentage == 60) {
+		pk_backend_job_set_allow_cancel (job, TRUE);
+		pk_backend_job_package (job, PK_INFO_ENUM_DOWNLOADING,
+					"kernel;2.6.23-0.115.rc3.git1.fc8;i386;installed",
+					"The Linux kernel (the core of the Linux operating system)");
+	}
+	if (job_data->progress_percentage == 80) {
+		pk_backend_job_package (job, PK_INFO_ENUM_DOWNLOADING,
+					"powertop;1.8-1.fc8;i386;fedora",
+					"Power consumption monitor");
+	}
+	job_data->progress_percentage += 1;
+	pk_backend_job_set_percentage (job, job_data->progress_percentage);
+	return TRUE;
+}
+
+/**
+ * pk_backend_upgrade_system:
+ */
+void
+pk_backend_upgrade_system (PkBackend *backend,
+			   PkBackendJob *job,
+			   PkBitfield transaction_flags,
+			   const gchar *distro_id,
+			   PkUpgradeKindEnum upgrade_kind)
+{
+	PkBackendDummyJobData *job_data = pk_backend_job_get_user_data (job);
+	pk_backend_job_set_status (job, PK_STATUS_ENUM_DOWNLOAD);
+	pk_backend_job_set_allow_cancel (job, TRUE);
+	job_data->signal_timeout = g_timeout_add (100, pk_backend_upgrade_system_timeout, job);
 }
 
 /**

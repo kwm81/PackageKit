@@ -1,6 +1,6 @@
-/* gstMatcher.cpp - Match GStreamer packages
+/* gst-matcher.cpp - Match GStreamer packages
  *
- * Copyright (c) 2010 Daniel Nicoletti <dantti12@gmail.com>
+ * Copyright (c) 2010-2016 Daniel Nicoletti <dantti12@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#include "gstMatcher.h"
+#include "gst-matcher.h"
 
 #include <regex.h>
 #include <gst/gst.h>
@@ -31,12 +31,12 @@ GstMatcher::GstMatcher(gchar **values)
     // gstreamer0.10(urisource-foobar)
     // gstreamer0.10(decoder-audio/x-wma)(wmaversion=3)
     const char *pkreg = "^gstreamer\\([0-9\\.]\\+\\)"
-            "(\\(encoder\\|decoder\\|urisource\\|urisink\\|element\\)-\\([^)]\\+\\))"
-            "\\(([^\\(^\\)]*)\\)\\?";
+                        "(\\(encoder\\|decoder\\|urisource\\|urisink\\|element\\)-\\([^)]\\+\\))"
+                        "\\(([^\\(^\\)]*)\\)\\?";
 
     regex_t pkre;
     if (regcomp(&pkre, pkreg, 0) != 0) {
-        g_debug("Regex compilation error: ", pkreg);
+        g_debug("Regex compilation error: %s", pkreg);
         return;
     }
 
@@ -75,10 +75,6 @@ GstMatcher::GstMatcher(gchar **values)
             } else if (type.compare("element") == 0) {
                 type = "Gstreamer-Elements: ";
             }
-            //             cout << version << endl;
-            //             cout << type << endl;
-            //             cout << data << endl;
-            //             cout << opt << endl;
 
             gchar *capsString;
             if (opt.empty()) {
@@ -111,21 +107,21 @@ GstMatcher::~GstMatcher()
 {
     gst_deinit();
 
-    for (vector<Match>::iterator i = m_matches.begin(); i != m_matches.end(); ++i) {
-        gst_caps_unref(static_cast<GstCaps*>(i->caps));
+    for (const Match &match : m_matches) {
+        gst_caps_unref(static_cast<GstCaps*>(match.caps));
     }
 }
 
 bool GstMatcher::matches(string record)
 {
-    for (vector<Match>::iterator i = m_matches.begin(); i != m_matches.end(); ++i) {
+    for (const Match &match : m_matches) {
         // Tries to find "Gstreamer-version: xxx"
-        if (record.find(i->version) != string::npos) {
+        if (record.find(match.version) != string::npos) {
             size_t found;
-            found = record.find(i->type);
+            found = record.find(match.type);
             // Tries to find the type "Gstreamer-Uri-Sinks: "
             if (found != string::npos) {
-                found += i->type.size(); // skips the "Gstreamer-Uri-Sinks: " string
+                found += match.type.size(); // skips the "Gstreamer-Uri-Sinks: " string
                 size_t endOfLine;
                 endOfLine = record.find('\n', found);
 
@@ -136,7 +132,7 @@ bool GstMatcher::matches(string record)
                 }
 
                 // if the record is capable of intersect them we found the package
-                bool provides = gst_caps_can_intersect(static_cast<GstCaps*>(i->caps), caps);
+                bool provides = gst_caps_can_intersect(static_cast<GstCaps*>(match.caps), caps);
                 gst_caps_unref(caps);
 
                 if (provides) {

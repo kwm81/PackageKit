@@ -33,7 +33,6 @@
 #include <glib/gi18n.h>
 #include <packagekit-glib2/pk-debug.h>
 
-#include "pk-cleanup.h"
 #include "pk-engine.h"
 #include "pk-shared.h"
 #include "pk-transaction.h"
@@ -115,11 +114,11 @@ main (int argc, char *argv[])
 	gboolean keep_environment = FALSE;
 	gint exit_idle_time;
 	guint timer_id = 0;
-	_cleanup_error_free_ GError *error = NULL;
-	_cleanup_free_ gchar *backend_name = NULL;
-	_cleanup_free_ gchar *conf_filename = NULL;
-	_cleanup_keyfile_unref_ GKeyFile *conf = NULL;
-	_cleanup_object_unref_ PkEngine *engine = NULL;
+	g_autoptr(GError) error = NULL;
+	g_autofree gchar *backend_name = NULL;
+	g_autofree gchar *conf_filename = NULL;
+	g_autoptr(GKeyFile) conf = NULL;
+	g_autoptr(PkEngine) engine = NULL;
 
 	const GOptionEntry options[] = {
 		{ "backend", '\0', 0, G_OPTION_ARG_STRING, &backend_name,
@@ -148,10 +147,6 @@ main (int argc, char *argv[])
 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
 	textdomain (GETTEXT_PACKAGE);
 	openlog ("PackageKit", LOG_NDELAY, LOG_USER);
-
-#if (GLIB_MAJOR_VERSION == 2 && GLIB_MINOR_VERSION < 35)
-	g_type_init ();
-#endif
 
 	/* set the default thread explicitly */
 	pk_is_thread_default ();

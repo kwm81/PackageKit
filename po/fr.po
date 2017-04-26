@@ -3,20 +3,22 @@
 # This file is distributed under the same license as the PACKAGE package.
 # 
 # Translators:
-# Claude Paroz <claude@2xlibre.net>, 2008,2013
+# Claude Paroz <claude@2xlibre.net>, 2008,2011,2013
 # Claude Paroz <claude@2xlibre.net>, 2011
 # troubi51 <corentin.perard@gmail.com>, 2009
 # dominique bribanick <chepioq@gmail.com>, 2013-2014
+# mrtomlinux <thomas.canniot@laposte.net>, 2009
 # Richard Hughes <richard@hughsie.com>, 2011
 # mrtomlinux <thomas.canniot@laposte.net>, 2009
+# troubi51 <corentin.perard@gmail.com>, 2009
 msgid ""
 msgstr ""
 "Project-Id-Version: PackageKit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2015-07-13 12:37+0100\n"
-"PO-Revision-Date: 2015-07-13 11:37+0000\n"
-"Last-Translator: Richard Hughes <richard@hughsie.com>\n"
-"Language-Team: French (http://www.transifex.com/p/packagekit/language/fr/)\n"
+"POT-Creation-Date: 2017-01-17 10:15+0100\n"
+"PO-Revision-Date: 2016-11-07 18:45+0000\n"
+"Last-Translator: Alexandre Franke <alexandre.franke@gmail.com>\n"
+"Language-Team: French (http://www.transifex.com/freedesktop/packagekit/language/fr/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -287,11 +289,11 @@ msgstr "Veuillez choisir le paquet correct : "
 #. TRANSLATORS: we asked to install a package
 #. * that could not be found in any repo
 msgid "Package not found"
-msgstr ""
+msgstr "Paquet non trouvé"
 
 #. TRANSLATORS: we couldn't find anything
 msgid "No packages were found"
-msgstr ""
+msgstr "Aucun paquet n'a été trouvé"
 
 #. TRANSLATORS: The user used
 #. * 'pkcon install dave.rpm' rather than
@@ -356,12 +358,12 @@ msgstr "Impossible de déterminer le moment où cette action a été accomplie p
 
 #. TRANSLATORS: this is the time since this role was used
 msgid "Time since"
-msgstr ""
+msgstr "Durée depuis"
 
 #. TRANSLATORS: There follows a list of packages downloaded and ready
 #. * to be updated
 msgid "Prepared updates:"
-msgstr ""
+msgstr "Mises à jour préparées :"
 
 #. TRANSLATORS: The network settings could not be sent
 msgid "The proxy could not be set"
@@ -381,14 +383,14 @@ msgstr "Installer les paquets sans demander de confirmation"
 
 #. command line argument, do we just download or apply changes
 msgid "Prepare the transaction by downloading packages only"
-msgstr ""
+msgstr "Préparer la transaction en téléchargeant les paquets uniquement"
 
 #. command line argument, do we allow package downgrades
 msgid "Allow packages to be downgraded during transaction"
-msgstr ""
+msgstr "Permettre aux paquets d'être rétrogradés pendant la transaction"
 
 msgid "Allow packages to be reinstalled during transaction"
-msgstr ""
+msgstr "Permettre aux paquets d'être réinstallés pendant la transaction"
 
 #. TRANSLATORS: command line argument, this command is not a priority
 msgid "Run the command using idle network bandwidth and also using less power"
@@ -406,7 +408,7 @@ msgstr "L'âge maximal du cache des métadonnées. Utilisez -1 pour « jamais 
 
 #. command line argument, do we ask questions
 msgid "Allow untrusted packages to be installed."
-msgstr ""
+msgstr "Permettre aux paquets non certifiés d'être installés."
 
 #. TRANSLATORS: we failed to contact the daemon
 msgid "Failed to parse command line"
@@ -483,7 +485,7 @@ msgid "A repo name, parameter and value are required"
 msgstr "Vous devez indiquer un nom de dépôt, un paramètre et une valeur"
 
 msgid "A repo id and autoremove required"
-msgstr ""
+msgstr "Un id de dépôt et autoremove sont nécessaires"
 
 #. TRANSLATORS: The user didn't
 #. * specify what action to use
@@ -508,7 +510,7 @@ msgid "A package provide string is required"
 msgstr "Vous devez indiquer une chaîne de fourniture de paquet"
 
 msgid "A filename is required"
-msgstr ""
+msgstr "Un nom de fichier est requis"
 
 #. TRANSLATORS: this is the description of the backend
 msgid "Description"
@@ -556,59 +558,19 @@ msgstr "Installation des mises à jour"
 
 #. TRANSLATORS: we've finished doing offline updates
 msgid "Rebooting after installing updates…"
-msgstr "Redémarrage après l'installation des mises à jour..."
+msgstr "Redémarrage après l'installation des mises à jour…"
 
 #. TRANSLATORS: we've finished doing offline updates
 msgid "Shutting down after installing updates…"
-msgstr ""
+msgstr "Fermeture après l'installation des mises à jour…"
 
 #. TRANSLATORS: we've started doing offline updates
 msgid "Installing updates; this could take a while..."
-msgstr ""
+msgstr "Installation des mises à jour ; Cela peut prendre un certain temps..."
 
-#. TRANSLATORS: when we are getting data from the daemon
-msgid "Getting package information..."
-msgstr "Obtention des informations sur les paquets..."
-
-#. TRANSLATORS: run an applicaiton
-#, c-format
-msgid "Run %s"
-msgstr "Exécuter %s"
-
-#. TRANSLATORS: show the installed version of a package
-msgid "Installed version"
-msgstr "Version installée"
-
-#. TRANSLATORS: run the application now
-#, c-format
-msgid "Run version %s now"
-msgstr "Exécuter la version %s maintenant"
-
-#. TRANSLATORS: run the application now
-msgid "Run now"
-msgstr "Exécuter maintenant"
-
-#. TRANSLATORS: update to a new version of the package
-#, c-format
-msgid "Update to version %s"
-msgstr "Mettre à jour vers la version %s"
-
-#. TRANSLATORS: To install a package
-#, c-format
-msgid "Install %s now"
-msgstr "Installer %s maintenant"
-
-#. TRANSLATORS: the version of the package
-msgid "Version"
-msgstr "Version"
-
-#. TRANSLATORS: noting found, so can't install
-msgid "No packages found for your system"
-msgstr "Aucun paquet trouvé pour votre système"
-
-#. TRANSLATORS: package is being installed
-msgid "Installing..."
-msgstr "Installation..."
+#. TRANSLATORS: we've started doing offline system upgrade
+msgid "Installing system upgrade; this could take a while..."
+msgstr "Installation de la mise à niveau du système ; Cela peut prendre un certain temps..."
 
 #. TRANSLATORS: downloading repo data so we can search
 msgid "Downloading details about the software sources."
@@ -898,7 +860,7 @@ msgstr "Disponible"
 
 #. TRANSLATORS: The state of a package, i.e. not installed
 msgid "Unavailable"
-msgstr ""
+msgstr "Indisponible"
 
 #. TRANSLATORS: The action of the package, in present tense
 msgid "Downloading"
@@ -996,7 +958,7 @@ msgstr "Installation des fichiers"
 
 #. TRANSLATORS: The role of the transaction, in present tense
 msgid "Refreshing cache"
-msgstr "Rafraîchissement du cache"
+msgstr "Actualisation du cache"
 
 #. TRANSLATORS: The role of the transaction, in present tense
 msgid "Updating packages"
@@ -1020,7 +982,7 @@ msgstr "Mise en place des données"
 
 #. TRANSLATORS: The role of the transaction, in present tense
 msgid "Removing repository"
-msgstr ""
+msgstr "Suppression du dépôt"
 
 #. TRANSLATORS: The role of the transaction, in present tense
 msgid "Resolving"
@@ -1057,6 +1019,10 @@ msgstr "Obtention des catégories"
 #. TRANSLATORS: The role of the transaction, in present tense
 msgid "Getting transactions"
 msgstr "Obtention des transactions"
+
+#. TRANSLATORS: The role of the transaction, in present tense
+msgid "Getting system upgrades"
+msgstr "Obtention des mises à niveau du système"
 
 #. TRANSLATORS: ask the user if they are comfortable installing insecure
 #. packages
@@ -1147,7 +1113,7 @@ msgstr "Le média correct n'a pas été inséré."
 
 #. TRANSLATORS: When processing, we might have to remove other dependencies
 msgid "The following packages have to be removed:"
-msgstr "Les paquets suivants vont être désinstallés :"
+msgstr "Les paquets suivants vont être désinstallés :"
 
 #. TRANSLATORS: When processing, we might have to install other dependencies
 msgid "The following packages have to be installed:"
@@ -1164,6 +1130,10 @@ msgstr "Les paquets suivants doivent être réinstallés :"
 #. TRANSLATORS: When processing, we might have to downgrade other dependencies
 msgid "The following packages have to be downgraded:"
 msgstr "Les paquets suivants doivent être rétrogradés à une version inférieure :"
+
+#. TRANSLATORS: When processing, we might have to obsolete other dependencies
+msgid "The following packages have to be obsoleted:"
+msgstr "Les paquets suivants doivent être marquées comme obsolètes :"
 
 #. TRANSLATORS: When processing, untrusted and non-verified packages may be
 #. encountered
@@ -1198,7 +1168,7 @@ msgid "Install signed package"
 msgstr "Installer un paquet signé"
 
 msgid "Authentication is required to install software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour installer un logiciel"
 
 #. SECURITY:
 #. - Normal users require admin authentication to install untrusted or
@@ -1209,7 +1179,7 @@ msgid "Install untrusted local file"
 msgstr "Installer un fichier local non signé"
 
 msgid "Authentication is required to install untrusted software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour installer un logiciel non certifié"
 
 #. SECURITY
 #. - Normal users require admin authentication to reinstall packages.
@@ -1218,10 +1188,10 @@ msgstr ""
 #. - If a package in question is not trusted, user's permission to install
 #. untrusted package will be checked as well.
 msgid "Install already installed package again"
-msgstr ""
+msgstr "Installer une nouvelle fois un paquet déjà installé"
 
 msgid "Authentication is required to reinstall software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour réinstaller un logiciel"
 
 #. SECURITY
 #. - Normal users require admin authentication to downgrade packages.
@@ -1230,10 +1200,10 @@ msgstr ""
 #. - If a package in question is not trusted, user's permission to install
 #. untrusted package will be checked as well.
 msgid "Install older version of installed package"
-msgstr ""
+msgstr "Installer une version plus ancienne du paquet installé"
 
 msgid "Authentication is required to downgrade software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour rétrograder un logiciel"
 
 #. SECURITY:
 #. - Normal users require admin authentication to add signing keys.
@@ -1241,12 +1211,12 @@ msgstr ""
 #. without a secure authentication.
 #. - This is not kept as each package should be authenticated.
 msgid "Trust a key used for signing software"
-msgstr ""
+msgstr "Faire confiance à une clé utilisée pour la signature de logiciel"
 
 msgid ""
 "Authentication is required to consider a key used for signing software as "
 "trusted"
-msgstr ""
+msgstr "Une authentification est nécessaire pour considérer une clé utilisée pour la signature de logiciel comme fiable"
 
 #. SECURITY:
 #. - Normal users do not require admin authentication to accept new
@@ -1272,7 +1242,7 @@ msgid "Remove package"
 msgstr "Supprimer un paquet"
 
 msgid "Authentication is required to remove software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour désinstaller un logiciel"
 
 #. SECURITY:
 #. - Normal users do not require admin authentication to update the
@@ -1281,10 +1251,10 @@ msgstr ""
 #. - Changing this to anything other than 'yes' will break unattended
 #. updates.
 msgid "Update software"
-msgstr ""
+msgstr "Mettre à jour le logiciel"
 
 msgid "Authentication is required to update software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour mettre à jour un logiciel"
 
 #. SECURITY:
 #. - Normal users require admin authentication to enable or disable
@@ -1314,7 +1284,7 @@ msgstr "Configurer le proxy réseau"
 msgid ""
 "Authentication is required to set the network proxy used for downloading "
 "software"
-msgstr ""
+msgstr "Une authentification est nécessaire pour configurer le serveur mandataire utilisé pour le téléchargement de logiciels"
 
 #. SECURITY:
 #. - Normal users require admin authentication to rebind a driver
@@ -1329,6 +1299,16 @@ msgid "Authentication is required to reload the device with a new driver"
 msgstr "Authentification requise pour redémarrer le périphérique avec un nouveau pilote"
 
 #. SECURITY:
+#. - Normal users require admin authentication to upgrade the disto as
+#. this can make the system unbootable or stop other applications from
+#. working.
+msgid "Upgrade System"
+msgstr "Mettre le système à niveau"
+
+msgid "Authentication is required to upgrade the operating system"
+msgstr "Une authentification est nécessaire pour mettre à niveau le système d'exploitation"
+
+#. SECURITY:
 #. - Normal users require admin authentication to repair the system
 #. since this can make the system unbootable or stop other
 #. applications from working.
@@ -1339,8 +1319,9 @@ msgid "Authentication is required to repair the installed software"
 msgstr "Il est nécessaire d'être authentifié pour réparer les logiciels installés"
 
 #. SECURITY:
-#. - Normal users are able to ask updates to be installed at
-#. early boot time without a password.
+#. - Normal users require admin authentication to upgrade the system
+#. to a new distribution since this can make the system unbootable or
+#. stop other applications from working.
 msgid "Trigger offline updates"
 msgstr "Lancer des mises à jour hors ligne"
 
@@ -1359,10 +1340,10 @@ msgstr "Il est nécessaire d'être authentifié pour effacer le message de mise 
 #. TRANSLATORS: this is a command alias
 #, c-format
 msgid "Alias to %s"
-msgstr ""
+msgstr "Alias vers %s"
 
 msgid "Command not found, valid commands are:"
-msgstr ""
+msgstr "Commande introuvable, les commandes valides sont :"
 
 #. TRANSLATORS: a backend is the system package tool, e.g. dnf, apt
 msgid "Packaging backend to use, e.g. dummy"
@@ -1370,31 +1351,31 @@ msgstr "Moteur du gestionnaire de paquets, par ex. : dummy"
 
 #. TRANSLATORS: command description
 msgid "Refresh the cache"
-msgstr ""
+msgstr "Actualiser le cache"
 
 #. TRANSLATORS: command description
 msgid "Refresh the cache (forced)"
-msgstr ""
+msgstr "Actualiser le cache (forcé)"
 
 #. TRANSLATORS: command description
 msgid "Search by names"
-msgstr ""
+msgstr "Rechercher par noms"
 
 #. TRANSLATORS: command description
 msgid "Search by details"
-msgstr ""
+msgstr "Rechercher par détails"
 
 #. TRANSLATORS: command description
 msgid "Search by files"
-msgstr ""
+msgstr "Rechercher par fichiers"
 
 #. TRANSLATORS: command description
 msgid "Install package"
-msgstr ""
+msgstr "Installer un paquet"
 
 #. TRANSLATORS: command description
 msgid "Set repository options"
-msgstr ""
+msgstr "Configurer les options du dépôt"
 
 #. TRANSLATORS: program name
 msgid "PackageKit"
@@ -1402,19 +1383,19 @@ msgstr "PackageKit"
 
 #. TRANSLATORS: the user didn't read the man page
 msgid "Failed to parse arguments"
-msgstr ""
+msgstr "Impossible d'analyser les arguments"
 
 #. TRANSLATORS: probably not yet installed
 msgid "Failed to load the config file"
-msgstr ""
+msgstr "Impossible de charger le fichier de configuration"
 
 #. TRANSLATORS: cannot load the backend the user specified
 msgid "Failed to load the backend"
-msgstr ""
+msgstr "Impossible de charger le moteur"
 
 #. TRANSLATORS: cannot unload the backend the user specified
 msgid "Failed to unload the backend"
-msgstr ""
+msgstr "Impossible de décharger le moteur"
 
 #. TRANSLATORS: if we should not monitor how long we are inactive for
 msgid "Disable the idle timer"

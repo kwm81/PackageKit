@@ -1,7 +1,7 @@
 /* matcher.cpp
  *
  * Copyright (c) 1999-2008 Daniel Burrows
- * Copyright (c) 2009 Daniel Nicoletti <dantti12@gmail.com>
+ * Copyright (c) 2009-2016 Daniel Nicoletti <dantti12@gmail.com>
  *               2012 Matthias Klumpp <matthias@tenstral.net>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -36,9 +36,8 @@ Matcher::Matcher(const string &matchers) :
 
 Matcher::~Matcher()
 {
-    for (vector<regex_t>::iterator i=m_matches.begin();
-         i != m_matches.end(); ++i) {
-        regfree(&*i);
+    for (regex_t &rx : m_matches) {
+        regfree(&rx);
     }
 }
 
@@ -57,35 +56,13 @@ bool string_matches(const char *s, regex_t &pattern_nogroup)
 bool Matcher::matches(const string &s)
 {
     int matchesCount = 0;
-    for (vector<regex_t>::iterator i=m_matches.begin();
-         i != m_matches.end(); ++i) {
-        if (string_matches(s.c_str(), *i)) {
+    for (regex_t &rx : m_matches) {
+        if (string_matches(s.c_str(), rx)) {
             matchesCount++;
         }
     }
+
     return m_matches.size() == matchesCount;
-}
-
-// This matcher is to be used for files
-// pass a map so it can remember which patter was alread used
-bool Matcher::matchesFile(const string &s, map<int, bool> &matchers_used)
-{
-    int matchesCount = 0;
-    for (vector<regex_t>::iterator i = m_matches.begin();
-         i != m_matches.end(); ++i) {
-        for (int i = 0; i < m_matches.size(); ++i) {
-            bool not_used = true;
-            if (matchers_used.find(i) != matchers_used.end()) {
-                not_used = true;
-            }
-
-            if (not_used && string_matches(s.c_str(), m_matches.at(i))) {
-                matchers_used[i] = true;
-            }
-        }
-    }
-
-    return m_matches.size() == matchers_used.size();
 }
 
 bool Matcher::parse_pattern(string::const_iterator &start,
@@ -116,16 +93,6 @@ bool Matcher::parse_pattern(string::const_iterator &start,
             m_hasError = true;
             return false;
         }
-
-        // 		regex_t pattern_group;
-        // 		if (do_compile(subString, pattern_group, REG_ICASE|REG_EXTENDED)) {
-        // 			m_matches.push_back(pattern_group);
-        // 		} else {
-        // 			regfree(&pattern_group);
-        // 			m_error = string("Regex compilation error");
-        // 			m_hasError = true;
-        // 			return false;
-        // 		}
     }
 
     return true;

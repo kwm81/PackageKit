@@ -1,6 +1,8 @@
-/*
+/* apt-cache-file.cpp
+ * 
  * Copyright (c) 2012 Daniel Nicoletti <dantti12@gmail.com>
  * Copyright (c) 2012 Matthias Klumpp <matthias@tenstral.net>
+ * Copyright (c) 2016 Harald Sitter <sitter@kde.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,15 +19,18 @@
  * the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  */
-#include "AptCacheFile.h"
+#include "apt-cache-file.h"
+
+#include <sstream>
+#include <cstdio>
+#include <apt-pkg/algorithms.h>
+#include <apt-pkg/progress.h>
+#include <apt-pkg/upgrade.h>
 
 #include "apt-utils.h"
 #include "apt-messages.h"
-#include "OpPackageKitProgress.h"
 
-#include <apt-pkg/algorithms.h>
-#include <sstream>
-#include <cstdio>
+using namespace APT;
 
 AptCacheFile::AptCacheFile(PkBackendJob *job) :
     m_packageRecords(0),
@@ -112,7 +117,8 @@ bool AptCacheFile::CheckDeps(bool AllowBroken)
 
 bool AptCacheFile::DistUpgrade()
 {
-    return pkgDistUpgrade(*this);
+    OpPackageKitProgress progress(m_job);
+    return Upgrade::Upgrade(*this, Upgrade::ALLOW_EVERYTHING, &progress);
 }
 
 void AptCacheFile::ShowBroken(bool Now, PkErrorEnum error)
@@ -450,7 +456,9 @@ std::string AptCacheFile::getLongDescriptionParsed(const pkgCache::VerIterator &
 
 bool AptCacheFile::tryToInstall(pkgProblemResolver &Fix,
                                 const pkgCache::VerIterator &ver,
-                                bool BrokenFix)
+                                bool BrokenFix,
+                                bool autoInst,
+                                bool preserveAuto)
 {
     pkgCache::PkgIterator Pkg = ver.ParentPkg();
 
@@ -466,11 +474,19 @@ bool AptCacheFile::tryToInstall(pkgProblemResolver &Fix,
         return false;
     }
 
+    // On updates we want to always preserve the autoflag as updates are usually
+    // non-indicative of whether or not the user explicitly wants this package to be
+    // installed or simply wants it to be updated.
+    const bool fromUser = preserveAuto ? !(State.Flags & pkgCache::Flag::Auto) : true;
+    // FIXME: this is ignoring the return value. OTOH the return value means little to us
+    //   since we run markinstall twice, once without autoinst and once with.
+    //   We probably should change the return value behavior and have the callee decide whether to
+    //   error out or call us again with autoinst. This however is further complicated by us
+    //   having protected, so we'd have to lift protection before this?
+    GetDepCache()->MarkInstall(Pkg, autoInst, 0, fromUser);
+    // Protect against further resolver changes.
     Fix.Clear(Pkg);
     Fix.Protect(Pkg);
-
-    // Install it
-    GetDepCache()->MarkInstall(Pkg, false);
 
     return true;
 }
@@ -544,4 +560,32 @@ std::string AptCacheFile::debParser(std::string descr)
     }
 
     return descr;
+}
+
+OpPackageKitProgress::OpPackageKitProgress(PkBackendJob *job) :
+    m_job(job)
+{
+    // Set PackageKit status
+    pk_backend_job_set_status(m_job, PK_STATUS_ENUM_LOADING_CACHE);
+}
+
+OpPackageKitProgress::~OpPackageKitProgress()
+{
+    Done();
+}
+
+void OpPackageKitProgress::Done()
+{
+    pk_backend_job_set_percentage(m_job, 100);
+}
+
+void OpPackageKitProgress::Update()
+{
+    if (CheckChange() == false) {
+        // No change has happened skip
+        return;
+    }
+
+    // Set the new percent
+    pk_backend_job_set_percentage(m_job, static_cast<unsigned int>(Percent));
 }

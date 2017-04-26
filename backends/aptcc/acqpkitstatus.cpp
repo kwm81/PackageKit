@@ -21,9 +21,7 @@
 #include "acqpkitstatus.h"
 
 #include "apt-intf.h"
-#include "pkg_acqfile.h"
 
-#include <apt-pkg/acquire-item.h>
 #include <apt-pkg/acquire-worker.h>
 
 // AcqPackageKitStatus::AcqPackageKitStatus - Constructor
@@ -193,8 +191,8 @@ bool AcqPackageKitStatus::MediaChange(string Media, string Drive)
 void AcqPackageKitStatus::updateStatus(pkgAcquire::ItemDesc & Itm, int status)
 {
     PkRoleEnum role = pk_backend_job_get_role(m_job);
-    if (role == PK_ROLE_ENUM_REFRESH_CACHE) {
-        // Ignore package update when refreshing the cache
+    if ((role == PK_ROLE_ENUM_REFRESH_CACHE) || (role == PK_ROLE_ENUM_GET_UPDATE_DETAIL)) {
+        // Ignore package update when refreshing the cache or fetching update details
         return;
     }
 
@@ -213,6 +211,6 @@ void AcqPackageKitStatus::updateStatus(pkgAcquire::ItemDesc & Itm, int status)
         m_apt->emitPackage(ver, PK_INFO_ENUM_DOWNLOADING);
         
         // Emit the individual progress
-        m_apt->emitPackageProgress(ver, status);
+        m_apt->emitPackageProgress(ver, PK_STATUS_ENUM_DOWNLOAD, status);
     }
 }

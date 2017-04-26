@@ -1,4 +1,4 @@
-/* PkgList.h
+/* pkg-list.h
  *
  * Copyright (c) 2012 Daniel Nicoletti <dantti12@gmail.com>
  *
@@ -25,7 +25,7 @@
 using std::vector;
 
 /**
- * This class is maent to show Operation Progress using PackageKit
+ * This class is meant to show Operation Progress using PackageKit
  */
 class PkgList : public vector<pkgCache::VerIterator>
 {

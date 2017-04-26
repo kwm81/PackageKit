@@ -1,8 +1,8 @@
 # Copyright (C) 2007-2012 Richard Hughes <richard@hughsie.com>
 
 m4_define([pk_major_version], [1])
-m4_define([pk_minor_version], [0])
-m4_define([pk_micro_version], [8])
+m4_define([pk_minor_version], [1])
+m4_define([pk_micro_version], [6])
 m4_define([pk_version],
           [pk_major_version.pk_minor_version.pk_micro_version])
 
@@ -55,9 +55,9 @@ AC_SUBST(PK_VERSION)
 # - If the interface is the same as the previous version, but bugs are
 #   fixed, change:
 #      REVISION += 1
-LT_CURRENT=18
-LT_REVISION=2
-LT_AGE=0
+LT_CURRENT=19
+LT_REVISION=3
+LT_AGE=1
 AC_SUBST(LT_CURRENT)
 AC_SUBST(LT_REVISION)
 AC_SUBST(LT_AGE)
@@ -120,7 +120,7 @@ if test "$GCC" = "yes"; then
 	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wmissing-include-dirs"
 	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wmissing-format-attribute"
 #	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wclobbered"
-#	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wempty-body"
+	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wempty-body"
 #	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wignored-qualifiers"
 	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wsign-compare"
 #	WARNINGFLAGS_CPP="$WARNINGFLAGS_CPP -Wtype-limits"
@@ -166,7 +166,7 @@ AM_GLIB_GNU_GETTEXT
 dnl ---------------------------------------------------------------------------
 dnl - Library dependencies
 dnl ---------------------------------------------------------------------------
-GLIB_REQUIRED=2.32.0
+GLIB_REQUIRED=2.46.0
 GIO_REQUIRED=2.16.1
 NETWORK_MANAGER_REQUIRED=0.6.4
 POLKIT_GOBJECT_REQUIRED=0.98
@@ -182,6 +182,17 @@ PKG_CHECK_MODULES(GIO, \
  gio-unix-2.0 >= $GIO_REQUIRED)
 PKG_CHECK_MODULES(POLKIT, \
 		  polkit-gobject-1 >= $POLKIT_GOBJECT_REQUIRED)
+
+# 0.114 introduced autocleanup functions for its types.
+PKG_CHECK_MODULES([POLKIT_0_114], [polkit-gobject-1 >= 0.114],
+                  [have_polkit_0_114=yes], [have_polkit_0_114=no])
+AS_IF([test "$have_polkit_0_114" = "yes"], [
+	AC_DEFINE([HAVE_POLKIT_0_114],[1],
+	          [Define as 1 if you have polkit >= 0.114])
+])
+
+# Avoid g_simple_async_result deprecation warnings in glib 2.46+
+AC_DEFINE(GLIB_VERSION_MIN_REQUIRED, GLIB_VERSION_2_44, [minimum glib version])
 
 dnl ---------------------------------------------------------------------------
 dnl - FreeBSD compatibility
@@ -249,6 +260,13 @@ fi
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$has_systemdsystemunitdir"])
 
 dnl ---------------------------------------------------------------------------
+dnl - Use systemd offline update
+dnl ---------------------------------------------------------------------------
+AC_ARG_ENABLE(offline-update, AS_HELP_STRING([--enable-offline-update],[enable offline update via systemd]),
+	      enable_offline_update=$enableval,enable_offline_update=yes)
+AM_CONDITIONAL(ENABLE_OFFLINE_UPDATE, [test x$enable_systemd = xyes -a x$enable_offline_update = xyes])
+
+dnl ---------------------------------------------------------------------------
 dnl - Generate man pages ? (default enabled)
 dnl ---------------------------------------------------------------------------
 AC_ARG_ENABLE(man_pages, AS_HELP_STRING([--disable-man-pages],[Disable man pages generation]), enable_man_pages=$enableval)
@@ -307,51 +325,6 @@ if test x$enable_local = xyes; then
 fi
 
 dnl ---------------------------------------------------------------------------
-dnl - Able to build browser plugin
-dnl ---------------------------------------------------------------------------
-AC_ARG_ENABLE(browser_plugin, AS_HELP_STRING([--enable-browser-plugin],[Build browser plugin functionality]),
-	      enable_browser_plugin=$enableval,enable_browser_plugin=yes)
-if test x$enable_browser_plugin = xyes; then
-	PKG_CHECK_EXISTS([npapi-sdk], mozilla_plugin=npapi-sdk, mozilla_plugin=mozilla-plugin)
-	PKG_CHECK_MODULES(PK_BROWSER_PLUGIN,	\
-			  $mozilla_plugin	\
-			  gio-unix-2.0		\
-			  nspr >= 4.8		\
-			  cairo			\
-			  pango			\
-			  gtk+-2.0 >= 2.14.0,
-			  build_browser_plugin=yes, build_browser_plugin=no)
-	if test $build_browser_plugin = "yes"; then
-
-		# check we have xulrunner headers
-		packagekit_save_CPPFLAGS="$CPPFLAGS"
-		packagekit_save_LDFLAGS="$LDFLAGS"
-		CPPFLAGS="$CPPFLAGS $PK_BROWSER_PLUGIN_CFLAGS"
-		LDFLAGS="$CPPFLAGS $PK_BROWSER_PLUGIN_LIBS"
-		AC_CHECK_HEADER(npfunctions.h, have_xulrunner_npfunctions=yes, have_xulrunner_npfunctions=no)
-		CPPFLAGS="$packagekit_save_CPPFLAGS"
-		LDFLAGS="$packagekit_save_LDFLAGS"
-
-		# Are we specifying a different mozilla plugin directory?
-		AC_ARG_WITH(mozilla-plugin-dir, [AS_HELP_STRING([--with-mozilla-plugin-dir=<dir>],[where to put the mozilla plugin])])
-		if ! test -z "$with_mozilla_plugin_dir" ; then
-			MOZILLA_PLUGIN_DIR="$with_mozilla_plugin_dir"
-		else
-			MOZILLA_PLUGIN_DIR="$LIBDIR/mozilla/plugins"
-		fi
-		AC_SUBST(MOZILLA_PLUGIN_DIR)
-
-		# not got headers
-		if test $have_xulrunner_npfunctions = "no"; then
-			build_browser_plugin=no
-		fi
-	fi
-else
-	build_browser_plugin=no
-fi
-AM_CONDITIONAL(PK_BUILD_BROWSER_PLUGIN, test $build_browser_plugin = "yes")
-
-dnl ---------------------------------------------------------------------------
 dnl - Able to build gstreamer plugin
 dnl ---------------------------------------------------------------------------
 AC_ARG_ENABLE(gstreamer_plugin, AS_HELP_STRING([--enable-gstreamer-plugin],[Build gstreamer plugin functionality]),
@@ -407,9 +380,9 @@ fi
 # backends
 AC_ARG_ENABLE(alpm, AS_HELP_STRING([--enable-alpm],[use the ALPM backend]),enable_alpm=$enableval,enable_alpm=no)
 AC_ARG_ENABLE(aptcc, AS_HELP_STRING([--enable-aptcc],[use the APTcc backend]),enable_aptcc=$enableval,enable_aptcc=no)
+AC_ARG_ENABLE(dnf, AS_HELP_STRING([--enable-dnf],[use the DNF backend]),enable_dnf=$enableval,enable_dnf=no)
 AC_ARG_ENABLE(dummy, AS_HELP_STRING([--enable-dummy],[use the dummy backend]),enable_dummy=$enableval,enable_dummy=yes)
 AC_ARG_ENABLE(entropy, AS_HELP_STRING([--enable-entropy],[use the entropy backend]),enable_entropy=$enableval,enable_entropy=no)
-AC_ARG_ENABLE(hif, AS_HELP_STRING([--enable-hif],[use the hif backend]),enable_hif=$enableval,enable_hif=no)
 AC_ARG_ENABLE(pisi, AS_HELP_STRING([--enable-pisi],[use the PiSi backend]),enable_pisi=$enableval,enable_pisi=no)
 AC_ARG_ENABLE(pkg, AS_HELP_STRING([--enable-pkg],[use the pkg backend]),enable_pkg=$enableval,enable_pkg=no)
 AC_ARG_ENABLE(poldek, AS_HELP_STRING([--enable-poldek],[use the poldek backend]),enable_poldek=$enableval,enable_poldek=no)
@@ -419,13 +392,14 @@ AC_ARG_ENABLE(katja, AS_HELP_STRING([--enable-katja],[use the Slackware backend]
 AC_ARG_ENABLE(urpmi, AS_HELP_STRING([--enable-urpmi],[use the URPMI backend]),enable_urpmi=$enableval,enable_urpmi=no)
 AC_ARG_ENABLE(yum, AS_HELP_STRING([--enable-yum],[use the YUM backend]),enable_yum=$enableval,enable_yum=no)
 AC_ARG_ENABLE(zypp, AS_HELP_STRING([--enable-zypp],[use the Zypp backend]),enable_zypp=$enableval,enable_zypp=no)
+AC_ARG_ENABLE(nix, AS_HELP_STRING([--enable-nix],[use the Nix backend]),enable_nix=$enableval,enable_nix=no)
 
 # export to Makefile.am's
 AM_CONDITIONAL(BACKEND_TYPE_ALPM, [test x$enable_alpm = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_APTCC, [test x$enable_aptcc = xyes])
+AM_CONDITIONAL(BACKEND_TYPE_DNF, [test x$enable_dnf = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_DUMMY, [test x$enable_dummy = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_ENTROPY, [test x$enable_entropy = xyes])
-AM_CONDITIONAL(BACKEND_TYPE_HIF, [test x$enable_hif = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_PISI, [test x$enable_pisi = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_PKG, [test x$enable_pkg = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_POLDEK, [test x$enable_poldek = xyes])
@@ -435,6 +409,7 @@ AM_CONDITIONAL(BACKEND_TYPE_KATJA, [test x$enable_katja = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_URPMI, [test x$enable_urpmi = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_YUM, [test x$enable_yum = xyes])
 AM_CONDITIONAL(BACKEND_TYPE_ZYPP, [test x$enable_zypp = xyes])
+AM_CONDITIONAL(BACKEND_TYPE_NIX, [test x$enable_nix = xyes])
 
 dnl ---------------------------------------------------------------------------
 dnl - Are we specifying a different dbus root ?
@@ -456,8 +431,16 @@ fi
 AC_SUBST(DBUS_SYS_DIR)
 AC_SUBST(DBUS_SERVICES_DIR)
 
-if test x$enable_hif = xyes; then
-	PKG_CHECK_MODULES(HIF, appstream-glib libhif >= 0.1.7)
+if test x$enable_dnf = xyes; then
+	PKG_CHECK_MODULES(DNF, appstream-glib libdnf >= 0.7.0)
+	AC_ARG_WITH(dnf-vendor,
+			[AS_HELP_STRING([--with-dnf-vendor=<vendor>],[select a vendor configuration (fedora, mageia; default is fedora)])])
+	if test "$with_dnf_vendor" = "fedora" -o "$with_dnf_vendor" = "mageia"; then
+		with_dnf_vendor="$with_dnf_vendor"
+	else
+		with_dnf_vendor="fedora"
+	fi
+	AC_SUBST(DNF_VENDOR, [$with_dnf_vendor])
 fi
 
 have_python_backend="no"
@@ -469,6 +452,9 @@ AM_CONDITIONAL(HAVE_PYTHON_BACKEND, test x$have_python_backend = xyes)
 if test x$enable_aptcc = xyes; then
 	dnl Use C++
 	AC_LANG([C++])
+
+	# Require C++11 support
+	AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
 
 	# check we have apt and gstreamer headers
 	save_CPPFLAGS="$CPPFLAGS"
@@ -482,26 +468,24 @@ if test x$enable_aptcc = xyes; then
 	AC_SUBST(APTCC_CFLAGS)
 	AC_SUBST(APTCC_LIBS)
 
-    AC_CHECK_LIB(apt-inst, main, , [AC_MSG_ERROR([Can't find the APT libraries -- please install libapt-pkg-dev])])
-    AC_SUBST(APTCC_CFLAGS)
-    AC_SUBST(APTCC_LIBS)
+	AC_CHECK_LIB(apt-inst, main, , [AC_MSG_ERROR([Can't find the APT libraries -- please install libapt-pkg-dev])])
+	AC_SUBST(APTCC_CFLAGS)
+	AC_SUBST(APTCC_LIBS)
 
 	PKG_CHECK_MODULES(GSTREAMER, gstreamer-1.0 gstreamer-base-1.0 gstreamer-plugins-base-1.0,,
 					[AC_MSG_ERROR([Can't find the gstreamer libraries -- please install libgstreamer-plugins-base1.0-dev])])
 	AC_SUBST(GSTREAMER_CFLAGS)
 	AC_SUBST(GSTREAMER_LIBS)
 
-	AC_MSG_CHECKING([whether apt includes the automatic dependency removal patch (required)])
-
-	AC_COMPILE_IFELSE(AC_LANG_PROGRAM([[#include <apt-pkg/depcache.h>]],
-					  [[extern pkgDepCache::ActionGroup d;]]),
+	AC_MSG_CHECKING([whether apt is at least at version 1.1])
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <apt-pkg/pkgsystem.h>]],
+					  [[_system->ArchitecturesSupported();]])],
 			  AC_MSG_RESULT([yes]),
-			  AC_MSG_FAILURE([need libapt-pkg 0.7 or later]))
+			  AC_MSG_FAILURE([need libapt-pkg 1.1 or later]))
 
 	AC_MSG_CHECKING([whether apt supports ddtp])
-
-	AC_COMPILE_IFELSE(AC_LANG_PROGRAM([[#include <apt-pkg/pkgcache.h>]],
-					  [[pkgCache::DescIterator d;]]),
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <apt-pkg/pkgcache.h>]],
+					  [[pkgCache::DescIterator d;]])],
 			  AC_MSG_RESULT([yes])
 			  AC_DEFINE([HAVE_DDTP], [], [Set to true if apt is DDTP-enabled]),
 			  AC_MSG_RESULT([no]))
@@ -513,7 +497,7 @@ if test x$enable_aptcc = xyes; then
 fi
 
 if test x$enable_alpm = xyes; then
-	PKG_CHECK_MODULES(ALPM, libalpm >= 8.2.0)
+	PKG_CHECK_MODULES(ALPM, libalpm >= 10.0.0)
 fi
 
 dnl xxx
@@ -537,6 +521,12 @@ if test x$enable_zypp = xyes; then
 fi
 
 if test x$enable_katja = xyes; then
+	dnl Use C++
+	AC_LANG([C++])
+
+	# Require C++14 support
+	AX_CXX_COMPILE_STDCXX([14], [ext], [mandatory])
+
 	AC_CHECK_LIB(curl, curl_version, [
 	    CURL_CFLAGS="`curl-config --cflags`"
 	    CURL_LIBS="`curl-config --libs`"
@@ -548,11 +538,26 @@ if test x$enable_katja = xyes; then
 		*)
 			KATJA_PKGMAIN="slackware"
 	esac
-	KATJA_CFLAGS="$CURL_CFLAGS"
-	KATJA_LIBS="$CURL_LIBS"
+
+	PKG_CHECK_MODULES([GLIBMM], [glibmm-2.4, giomm-2.4])
+
+	KATJA_CFLAGS="$CURL_CFLAGS $GLIBMM_CFLAGS"
+	KATJA_LIBS="$CURL_LIBS $GLIBMM_LIBS"
 	AC_SUBST(KATJA_PKGMAIN)
 	AC_SUBST(KATJA_CFLAGS)
 	AC_SUBST(KATJA_LIBS)
+fi
+
+if test x$enable_nix = xyes; then
+	dnl Use C++
+	AC_LANG([C++])
+
+	# Require C++11 support
+	AX_CXX_COMPILE_STDCXX_11([ext], [mandatory])
+
+	PKG_CHECK_MODULES(NIX, nix-expr >= 1.12)
+	PKG_CHECK_MODULES(NIX, nix-main >= 1.12)
+	PKG_CHECK_MODULES(NIX, nix-store >= 1.12)
 fi
 
 AC_SUBST(PK_PLUGIN_DIR, "\$(libdir)/packagekit-backend")
@@ -570,7 +575,6 @@ docs/api/Makefile
 docs/api/dbus/Makefile
 docs/api/version.xml
 contrib/Makefile
-contrib/browser-plugin/Makefile
 contrib/gstreamer-plugin/Makefile
 contrib/gtk-module/Makefile
 contrib/gtk-module/gtk2/Makefile
@@ -580,9 +584,9 @@ contrib/cron/Makefile
 backends/Makefile
 backends/alpm/Makefile
 backends/aptcc/Makefile
+backends/dnf/Makefile
 backends/dummy/Makefile
 backends/entropy/Makefile
-backends/hif/Makefile
 backends/katja/Makefile
 backends/test/Makefile
 backends/test/helpers/Makefile
@@ -598,6 +602,7 @@ backends/portage/Makefile
 backends/ports/Makefile
 backends/ports/ruby_packagekit/Makefile
 backends/zypp/Makefile
+backends/nix/Makefile
 data/Makefile
 data/org.freedesktop.PackageKit.conf
 data/tests/Makefile
@@ -633,8 +638,8 @@ echo "
         cppflags:                  ${CPPFLAGS}
         Able to run locally:       ${enable_local}
         Use systemd:               ${enable_systemd}
+        Enable offline update:     ${enable_offline_update}
         Networking stacks:         ${networking_apis}
-        Browser plugin:            ${build_browser_plugin}
         GStreamer plugin:          ${build_gstreamer_plugin}
         Pango module (GTK+3):      ${build_gtk_module}
         gobject-introspection:     ${found_introspection}
@@ -648,9 +653,10 @@ echo "
         Backends:
         ALPM backend:              ${enable_alpm}
         APTcc backend:             ${enable_aptcc}
+        DNF backend:               ${enable_dnf}
+        DNF backend vendor:        ${with_dnf_vendor}
         dummy backend:             ${enable_dummy}
         Entropy backend:           ${enable_entropy}
-        Hif backend:               ${enable_hif}
         PiSi backend:              ${enable_pisi}
         poldek backend:            ${enable_poldek}
         Portage backend:           ${enable_portage}
@@ -660,4 +666,5 @@ echo "
         URPMI backend:             ${enable_urpmi}
         YUM backend:               ${enable_yum}
         Zypp backend:              ${enable_zypp}
+        Nix backend:               ${enable_nix}
 "

@@ -41,8 +41,11 @@ G_BEGIN_DECLS
 #define PK_OFFLINE_DESTDIR		""
 #endif
 
-/* the list of packages to update */
+/* the state file for regular offline update */
 #define PK_OFFLINE_PREPARED_FILENAME	PK_OFFLINE_DESTDIR "/var/lib/PackageKit/prepared-update"
+/* the state file for offline system upgrade */
+#define PK_OFFLINE_PREPARED_UPGRADE_FILENAME \
+					PK_OFFLINE_DESTDIR "/var/lib/PackageKit/prepared-upgrade"
 
 /* the trigger file that systemd uses to start a different boot target */
 #define PK_OFFLINE_TRIGGER_FILENAME	PK_OFFLINE_DESTDIR "/system-update"
@@ -62,7 +65,18 @@ gboolean		 pk_offline_auth_cancel		(GError			**error);
 gboolean		 pk_offline_auth_clear_results	(GError			**error);
 gboolean		 pk_offline_auth_trigger	(PkOfflineAction	 action,
 							 GError			**error);
+gboolean		 pk_offline_auth_trigger_upgrade
+							(PkOfflineAction	 action,
+							 GError			**error);
 gboolean		 pk_offline_auth_set_prepared_ids(gchar			**package_ids,
+							 GError			**error);
+gboolean		 pk_offline_auth_set_prepared_upgrade
+							(const gchar		 *name,
+							 const gchar		 *release_ver,
+							 GError			**error);
+gboolean		 pk_offline_get_prepared_upgrade
+							(gchar			**name,
+							 gchar			**release_ver,
 							 GError			**error);
 gboolean		 pk_offline_auth_invalidate	(GError			**error);
 gboolean		 pk_offline_auth_set_results	(PkResults		*results,

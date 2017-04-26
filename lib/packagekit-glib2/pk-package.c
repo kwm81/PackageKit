@@ -32,11 +32,10 @@
 
 #include <glib-object.h>
 
-#include "src/pk-cleanup.h"
-
 #include <packagekit-glib2/pk-package.h>
 #include <packagekit-glib2/pk-common.h>
 #include <packagekit-glib2/pk-enum.h>
+#include <packagekit-glib2/pk-enum-types.h>
 #include <packagekit-glib2/pk-package-id.h>
 
 static void     pk_package_finalize	(GObject     *object);
@@ -217,7 +216,7 @@ out:
 gboolean
 pk_package_parse (PkPackage *package, const gchar *data, GError **error)
 {
-	_cleanup_strv_free_ gchar **sections = NULL;
+	g_auto(GStrv) sections = NULL;
 
 	g_return_val_if_fail (PK_IS_PACKAGE (package), FALSE);
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -379,7 +378,7 @@ pk_package_get_arch (PkPackage *package)
  *
  * Gets the package data, which is usually the repository ID that contains the
  * package. Special ID's include "installed" for installed packages, and "local"
- * for local packages that exist on disk but not in a repoitory.
+ * for local packages that exist on disk but not in a repository.
  *
  * Return value: the data, or %NULL if unset
  *
@@ -430,13 +429,13 @@ pk_package_get_property (GObject *object, guint prop_id, GValue *value, GParamSp
 		g_value_set_string (value, priv->summary);
 		break;
 	case PROP_INFO:
-		g_value_set_uint (value, priv->info);
+		g_value_set_enum (value, priv->info);
 		break;
 	case PROP_LICENSE:
 		g_value_set_string (value, priv->license);
 		break;
 	case PROP_GROUP:
-		g_value_set_uint (value, priv->group);
+		g_value_set_enum (value, priv->group);
 		break;
 	case PROP_DESCRIPTION:
 		g_value_set_string (value, priv->description);
@@ -463,7 +462,7 @@ pk_package_get_property (GObject *object, guint prop_id, GValue *value, GParamSp
 		g_value_set_boxed (value, priv->update_cve_urls);
 		break;
 	case PROP_UPDATE_RESTART:
-		g_value_set_uint (value, priv->update_restart);
+		g_value_set_enum (value, priv->update_restart);
 		break;
 	case PROP_UPDATE_UPDATE_TEXT:
 		g_value_set_string (value, priv->update_text);
@@ -472,7 +471,7 @@ pk_package_get_property (GObject *object, guint prop_id, GValue *value, GParamSp
 		g_value_set_string (value, priv->update_changelog);
 		break;
 	case PROP_UPDATE_STATE:
-		g_value_set_uint (value, priv->update_state);
+		g_value_set_enum (value, priv->update_state);
 		break;
 	case PROP_UPDATE_ISSUED:
 		g_value_set_string (value, priv->update_issued);
@@ -497,7 +496,7 @@ pk_package_set_property (GObject *object, guint prop_id, const GValue *value, GP
 
 	switch (prop_id) {
 	case PROP_INFO:
-		pk_package_set_info (package, g_value_get_uint (value));
+		pk_package_set_info (package, g_value_get_enum (value));
 		break;
 	case PROP_SUMMARY:
 		pk_package_set_summary (package, g_value_get_string (value));
@@ -507,7 +506,7 @@ pk_package_set_property (GObject *object, guint prop_id, const GValue *value, GP
 		priv->license = g_strdup (g_value_get_string (value));
 		break;
 	case PROP_GROUP:
-		priv->group = g_value_get_uint (value);
+		priv->group = g_value_get_enum (value);
 		break;
 	case PROP_DESCRIPTION:
 		g_free (priv->description);
@@ -541,7 +540,7 @@ pk_package_set_property (GObject *object, guint prop_id, const GValue *value, GP
 		priv->update_cve_urls = g_strdupv (g_value_get_boxed (value));
 		break;
 	case PROP_UPDATE_RESTART:
-		priv->update_restart = g_value_get_uint (value);
+		priv->update_restart = g_value_get_enum (value);
 		break;
 	case PROP_UPDATE_UPDATE_TEXT:
 		g_free (priv->update_text);
@@ -552,7 +551,7 @@ pk_package_set_property (GObject *object, guint prop_id, const GValue *value, GP
 		priv->update_changelog = g_strdup (g_value_get_string (value));
 		break;
 	case PROP_UPDATE_STATE:
-		priv->update_state = g_value_get_uint (value);
+		priv->update_state = g_value_get_enum (value);
 		break;
 	case PROP_UPDATE_ISSUED:
 		g_free (priv->update_issued);
@@ -586,9 +585,9 @@ pk_package_class_init (PkPackageClass *klass)
 	 *
 	 * Since: 0.5.4
 	 */
-	pspec = g_param_spec_uint ("info", NULL,
+	pspec = g_param_spec_enum ("info", NULL,
 				   "The PkInfoEnum package type, e.g. PK_INFO_ENUM_NORMAL",
-				   0, G_MAXUINT, PK_INFO_ENUM_UNKNOWN,
+				   PK_TYPE_INFO_ENUM, PK_INFO_ENUM_UNKNOWN,
 				   G_PARAM_READWRITE);
 	g_object_class_install_property (object_class, PROP_INFO, pspec);
 
@@ -630,9 +629,9 @@ pk_package_class_init (PkPackageClass *klass)
 	 *
 	 * Since: 0.5.4
 	 */
-	pspec = g_param_spec_uint ("group", NULL,
+	pspec = g_param_spec_enum ("group", NULL,
 				   "The package group",
-				   0, PK_GROUP_ENUM_LAST, PK_GROUP_ENUM_UNKNOWN,
+				   PK_TYPE_GROUP_ENUM, PK_GROUP_ENUM_UNKNOWN,
 				   G_PARAM_READWRITE);
 	g_object_class_install_property (object_class, PROP_GROUP, pspec);
 
@@ -729,9 +728,9 @@ pk_package_class_init (PkPackageClass *klass)
 	 *
 	 * Since: 0.5.4
 	 */
-	pspec = g_param_spec_uint ("update-restart", NULL,
+	pspec = g_param_spec_enum ("update-restart", NULL,
 				   "The update restart type",
-				   0, PK_RESTART_ENUM_LAST, PK_RESTART_ENUM_UNKNOWN,
+				   PK_TYPE_RESTART_ENUM, PK_RESTART_ENUM_UNKNOWN,
 				   G_PARAM_READWRITE);
 	g_object_class_install_property (object_class, PROP_UPDATE_RESTART, pspec);
 
@@ -762,9 +761,9 @@ pk_package_class_init (PkPackageClass *klass)
 	 *
 	 * Since: 0.5.4
 	 */
-	pspec = g_param_spec_uint ("update-state", NULL,
+	pspec = g_param_spec_enum ("update-state", NULL,
 				   "The update state",
-				   0, PK_UPDATE_STATE_ENUM_LAST, PK_UPDATE_STATE_ENUM_UNKNOWN,
+				   PK_TYPE_UPDATE_STATE_ENUM, PK_UPDATE_STATE_ENUM_UNKNOWN,
 				   G_PARAM_READWRITE);
 	g_object_class_install_property (object_class, PROP_UPDATE_STATE, pspec);
 

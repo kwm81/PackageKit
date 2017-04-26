@@ -14,29 +14,28 @@ command_not_found_handle () {
 	[[ $- =~ i ]] || runcnf=0
 
 	# don't run if DBus isn't running
-	[ ! -S /var/run/dbus/system_bus_socket ] && runcnf=0
+	[[ ! -S /run/dbus/system_bus_socket ]] && runcnf=0
 
 	# don't run if packagekitd doesn't exist in the _system_ root
-	[ ! -x @LIBEXECDIR@/packagekitd ] && runcnf=0
+	[[ ! -x '@LIBEXECDIR@/packagekitd' ]] && runcnf=0
 
 	# don't run if bash command completion is being run
-	[ ${COMP_CWORD-} ] && runcnf=0
+	[[ -n ${COMP_CWORD-} ]] && runcnf=0
 
 	# run the command, or just print a warning
 	if [ $runcnf -eq 1 ]; then
-		@LIBEXECDIR@/pk-command-not-found "$@"
+		'@LIBEXECDIR@/pk-command-not-found' "$@"
 		retval=$?
-	else
-		local shell=`basename "$SHELL"`
-		echo "$shell: $1: command not found"
+	elif [[ -n "${BASH_VERSION-}" ]]; then
+		printf >&2 'bash: %scommand not found\n' "${1:+$1: }"
 	fi
 
 	# return success or failure
 	return $retval
 }
 
-if [ -n "$ZSH_VERSION" ]; then
+if [[ -n "${ZSH_VERSION-}" ]]; then
 	command_not_found_handler () {
-		command_not_found_handle "$@"
+		command_not_found_handle "$@" && return 127
 	}
 fi

@@ -1,4 +1,4 @@
-/* gstMatcher.h - Match GStreamer package names
+/* gst-matcher.h - Match GStreamer package names
  *
  * Copyright (c) 2010 Daniel Nicoletti <dantti12@gmail.com>
  *

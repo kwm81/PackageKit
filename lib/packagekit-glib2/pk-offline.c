@@ -27,8 +27,6 @@
 #include <errno.h>
 #include <string.h>
 
-#include "src/pk-cleanup.h"
-
 #include "pk-offline.h"
 #include "pk-offline-private.h"
 
@@ -39,14 +37,7 @@
  *
  * Since: 0.9.6
  **/
-GQuark
-pk_offline_error_quark (void)
-{
-	static GQuark quark = 0;
-	if (!quark)
-		quark = g_quark_from_static_string ("pk_offline_error");
-	return quark;
-}
+G_DEFINE_QUARK (pk-offline-error-quark, pk_offline_error)
 
 /**
  * pk_offline_action_to_string:
@@ -111,8 +102,8 @@ pk_offline_action_from_string (const gchar *action)
 gboolean
 pk_offline_cancel (GCancellable *cancellable, GError **error)
 {
-	_cleanup_object_unref_ GDBusConnection *connection = NULL;
-	_cleanup_variant_unref_ GVariant *res = NULL;
+	g_autoptr(GDBusConnection) connection = NULL;
+	g_autoptr(GVariant) res = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -150,8 +141,8 @@ pk_offline_cancel (GCancellable *cancellable, GError **error)
 gboolean
 pk_offline_clear_results (GCancellable *cancellable, GError **error)
 {
-	_cleanup_object_unref_ GDBusConnection *connection = NULL;
-	_cleanup_variant_unref_ GVariant *res = NULL;
+	g_autoptr(GDBusConnection) connection = NULL;
+	g_autoptr(GVariant) res = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -191,8 +182,8 @@ gboolean
 pk_offline_trigger (PkOfflineAction action, GCancellable *cancellable, GError **error)
 {
 	const gchar *tmp;
-	_cleanup_object_unref_ GDBusConnection *connection = NULL;
-	_cleanup_variant_unref_ GVariant *res = NULL;
+	g_autoptr(GDBusConnection) connection = NULL;
+	g_autoptr(GVariant) res = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
@@ -205,6 +196,48 @@ pk_offline_trigger (PkOfflineAction action, GCancellable *cancellable, GError **
 					   "/org/freedesktop/PackageKit",
 					   "org.freedesktop.PackageKit.Offline",
 					   "Trigger",
+					   g_variant_new ("(s)", tmp),
+					   NULL,
+					   G_DBUS_CALL_FLAGS_NONE,
+					   -1,
+					   cancellable,
+					   error);
+	if (res == NULL)
+		return FALSE;
+	return TRUE;
+}
+
+/**
+ * pk_offline_trigger_upgrade:
+ * @action: a #PkOfflineAction, e.g. %PK_OFFLINE_ACTION_REBOOT
+ * @cancellable: A #GCancellable or %NULL
+ * @error: A #GError or %NULL
+ *
+ * Triggers the offline system upgrade so that the next reboot will perform the
+ * pending transaction.
+ *
+ * Return value: %TRUE for success, else %FALSE and @error set
+ *
+ * Since: 1.0.12
+ **/
+gboolean
+pk_offline_trigger_upgrade (PkOfflineAction action, GCancellable *cancellable, GError **error)
+{
+	const gchar *tmp;
+	g_autoptr(GDBusConnection) connection = NULL;
+	g_autoptr(GVariant) res = NULL;
+
+	g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+	connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
+	if (connection == NULL)
+		return FALSE;
+	tmp = pk_offline_action_to_string (action);
+	res = g_dbus_connection_call_sync (connection,
+					   "org.freedesktop.PackageKit",
+					   "/org/freedesktop/PackageKit",
+					   "org.freedesktop.PackageKit.Offline",
+					   "TriggerUpgrade",
 					   g_variant_new ("(s)", tmp),
 					   NULL,
 					   G_DBUS_CALL_FLAGS_NONE,
@@ -232,8 +265,8 @@ PkOfflineAction
 pk_offline_get_action (GError **error)
 {
 	PkOfflineAction action;
-	_cleanup_error_free_ GError *error_local = NULL;
-	_cleanup_free_ gchar *action_data = NULL;
+	g_autoptr(GError) error_local = NULL;
+	g_autofree gchar *action_data = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, PK_OFFLINE_ACTION_UNKNOWN);
 
@@ -277,8 +310,8 @@ PkPackageSack *
 pk_offline_get_prepared_sack (GError **error)
 {
 	guint i;
-	_cleanup_object_unref_ PkPackageSack *sack = NULL;
-	_cleanup_strv_free_ gchar **package_ids = NULL;
+	g_autoptr(PkPackageSack) sack = NULL;
+	g_auto(GStrv) package_ids = NULL;
 
 	/* get the list of packages */
 	package_ids = pk_offline_get_prepared_ids (error);
@@ -309,8 +342,10 @@ pk_offline_get_prepared_sack (GError **error)
 gchar **
 pk_offline_get_prepared_ids (GError **error)
 {
-	_cleanup_error_free_ GError *error_local = NULL;
-	_cleanup_free_ gchar *data = NULL;
+	g_autoptr(GError) error_local = NULL;
+	g_autofree gchar *data = NULL;
+	g_autofree gchar *prepared_ids = NULL;
+	g_autoptr(GKeyFile) keyfile = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
@@ -335,8 +370,64 @@ pk_offline_get_prepared_ids (GError **error)
 		return NULL;
 	}
 
+	keyfile = g_key_file_new ();
+	if (!g_key_file_load_from_data (keyfile, data, -1, G_KEY_FILE_NONE, &error_local)) {
+		/* fall back to previous plain text file format for backwards compatibility */
+		return g_strsplit (data, "\n", -1);
+	}
+
+	prepared_ids = g_key_file_get_string (keyfile, "update", "prepared_ids", error);
+	if (prepared_ids == NULL)
+		return NULL;
+
 	/* return raw package ids */
-	return g_strsplit (data, "\n", -1);
+	return g_strsplit (prepared_ids, ",", -1);
+}
+
+/**
+ * pk_offline_get_prepared_upgrade_name:
+ * @error: A #GError or %NULL
+ *
+ * Gets the name of the prepared system upgrade in the prepared transaction.
+ *
+ * Return value: the name, or %NULL if unset, free with g_free()
+ *
+ * Since: 1.1.2
+ **/
+gchar *
+pk_offline_get_prepared_upgrade_name (GError **error)
+{
+	gchar *name = NULL;
+
+	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+	if (!pk_offline_get_prepared_upgrade (&name, NULL, error))
+		return NULL;
+
+	return name;
+}
+
+/**
+ * pk_offline_get_prepared_upgrade_version:
+ * @error: A #GError or %NULL
+ *
+ * Gets the version of the prepared system upgrade in the prepared transaction.
+ *
+ * Return value: the version, or %NULL if unset, free with g_free()
+ *
+ * Since: 1.0.12
+ **/
+gchar *
+pk_offline_get_prepared_upgrade_version (GError **error)
+{
+	gchar *version = NULL;
+
+	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+	if (!pk_offline_get_prepared_upgrade (NULL, &version, error))
+		return NULL;
+
+	return version;
 }
 
 /**
@@ -353,9 +444,29 @@ pk_offline_get_prepared_ids (GError **error)
 GFileMonitor *
 pk_offline_get_prepared_monitor (GCancellable *cancellable, GError **error)
 {
-	_cleanup_object_unref_ GFile *file = NULL;
+	g_autoptr(GFile) file = NULL;
 	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 	file = g_file_new_for_path (PK_OFFLINE_PREPARED_FILENAME);
+	return g_file_monitor_file (file, G_FILE_MONITOR_NONE, NULL, error);
+}
+
+/**
+ * pk_offline_get_prepared_upgrade_monitor:
+ * @cancellable: A #GCancellable or %NULL
+ * @error: A #GError or %NULL
+ *
+ * Gets a file monitor for the prepared system upgrade transaction.
+ *
+ * Return value: (transfer full): A #GFileMonitor, or %NULL
+ *
+ * Since: 1.0.12
+ **/
+GFileMonitor *
+pk_offline_get_prepared_upgrade_monitor (GCancellable *cancellable, GError **error)
+{
+	g_autoptr(GFile) file = NULL;
+	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+	file = g_file_new_for_path (PK_OFFLINE_PREPARED_UPGRADE_FILENAME);
 	return g_file_monitor_file (file, G_FILE_MONITOR_NONE, NULL, error);
 }
 
@@ -373,7 +484,7 @@ pk_offline_get_prepared_monitor (GCancellable *cancellable, GError **error)
 GFileMonitor *
 pk_offline_get_action_monitor (GCancellable *cancellable, GError **error)
 {
-	_cleanup_object_unref_ GFile *file = NULL;
+	g_autoptr(GFile) file = NULL;
 	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 	file = g_file_new_for_path (PK_OFFLINE_ACTION_FILENAME);
 	return g_file_monitor_file (file, G_FILE_MONITOR_NONE, NULL, error);
@@ -383,7 +494,7 @@ pk_offline_get_action_monitor (GCancellable *cancellable, GError **error)
  * pk_offline_get_results_mtime:
  * @error: A #GError or %NULL
  *
- * Gets the motification time of the prepared transaction.
+ * Gets the modification time of the prepared transaction.
  *
  * Return value: a unix time, or 0 for error.
  *
@@ -392,9 +503,9 @@ pk_offline_get_action_monitor (GCancellable *cancellable, GError **error)
 guint64
 pk_offline_get_results_mtime (GError **error)
 {
-	_cleanup_error_free_ GError *error_local = NULL;
-	_cleanup_object_unref_ GFile *file = NULL;
-	_cleanup_object_unref_ GFileInfo *info = NULL;
+	g_autoptr(GError) error_local = NULL;
+	g_autoptr(GFile) file = NULL;
+	g_autoptr(GFileInfo) info = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, 0);
 
@@ -440,12 +551,12 @@ pk_offline_get_results (GError **error)
 	gboolean ret;
 	gboolean success;
 	guint i;
-	_cleanup_error_free_ GError *error_local = NULL;
-	_cleanup_free_ gchar *data = NULL;
-	_cleanup_keyfile_unref_ GKeyFile *file = NULL;
-	_cleanup_object_unref_ PkError *pk_error = NULL;
-	_cleanup_object_unref_ PkResults *results = NULL;
-	_cleanup_strv_free_ gchar **package_ids = NULL;
+	g_autoptr(GError) error_local = NULL;
+	g_autofree gchar *data = NULL;
+	g_autoptr(GKeyFile) file = NULL;
+	g_autoptr(PkError) pk_error = NULL;
+	g_autoptr(PkResults) results = NULL;
+	g_auto(GStrv) package_ids = NULL;
 
 	g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
@@ -478,8 +589,8 @@ pk_offline_get_results (GError **error)
 	success = g_key_file_get_boolean (file, PK_OFFLINE_RESULTS_GROUP,
 					  "Success", NULL);
 	if (!success) {
-		_cleanup_free_ gchar *details = NULL;
-		_cleanup_free_ gchar *enum_str = NULL;
+		g_autofree gchar *details = NULL;
+		g_autofree gchar *enum_str = NULL;
 		pk_error = pk_error_new ();
 		enum_str = g_key_file_get_string (file,
 						  PK_OFFLINE_RESULTS_GROUP,
@@ -505,7 +616,7 @@ pk_offline_get_results (GError **error)
 	if (data != NULL) {
 		package_ids = g_strsplit (data, ",", -1);
 		for (i = 0; package_ids[i] != NULL; i++) {
-			_cleanup_object_unref_ PkPackage *pkg = NULL;
+			g_autoptr(PkPackage) pkg = NULL;
 			pkg = pk_package_new ();
 			pk_package_set_info (pkg, PK_INFO_ENUM_UPDATING);
 			if (!pk_package_set_id (pkg, package_ids[i], error))

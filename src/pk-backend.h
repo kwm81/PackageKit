@@ -36,7 +36,6 @@
 
 #include "pk-backend.h"
 #include "pk-backend-job.h"
-#include "pk-cleanup.h"
 
 G_BEGIN_DECLS
 
@@ -59,6 +58,10 @@ typedef struct
 {
 	GObjectClass		 parent_class;
 } PkBackendClass;
+
+#ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(PkBackend, g_object_unref)
+#endif
 
 /**
  * PK_BACKEND_PERCENTAGE_INVALID:
@@ -230,6 +233,11 @@ void		 pk_backend_what_provides		(PkBackend	*backend,
 void		 pk_backend_get_packages		(PkBackend	*backend,
 							 PkBackendJob	*job,
 							 PkBitfield	 filters);
+void		 pk_backend_upgrade_system		(PkBackend	*backend,
+							 PkBackendJob	*job,
+							 PkBitfield	 transaction_flags,
+							 const gchar	*distro_id,
+							 PkUpgradeKindEnum upgrade_kind);
 void		 pk_backend_repair_system		(PkBackend	*backend,
 							 PkBackendJob	*job,
 							 PkBitfield	 transaction_flags);

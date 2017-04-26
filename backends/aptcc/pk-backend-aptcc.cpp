@@ -1,6 +1,8 @@
-/*
+/* pk-backend-aptcc.cpp
+ *
  * Copyright (C) 2007-2008 Richard Hughes <richard@hughsie.com>
- * Copyright (C) 2009-2012 Daniel Nicoletti <dantti12@gmail.com>
+ * Copyright (C) 2009-2016 Daniel Nicoletti <dantti12@gmail.com>
+ *               2016 Harald Sitter <sitter@kde.org>
  *
  * Licensed under the GNU General Public License Version 2
  *
@@ -29,7 +31,7 @@
 #include <apt-pkg/init.h>
 
 #include "apt-intf.h"
-#include "AptCacheFile.h"
+#include "apt-cache-file.h"
 #include "apt-messages.h"
 #include "acqpkitstatus.h"
 #include "apt-sourceslist.h"
@@ -59,8 +61,8 @@ const gchar* pk_backend_get_author(PkBackend *backend)
 gboolean
 pk_backend_supports_parallelization (PkBackend *backend)
 {
-	// we need to set this to TRUE as soon as the parallelization work is completed!
-	return FALSE;
+    // we need to set this to TRUE as soon as the parallelization work is completed!
+    return FALSE;
 }
 
 /**
@@ -90,7 +92,7 @@ void pk_backend_initialize(GKeyFile *conf, PkBackend *backend)
     }
 
     spawn = pk_backend_spawn_new(conf);
-//     pk_backend_spawn_set_job(spawn, backend);
+    //     pk_backend_spawn_set_job(spawn, backend);
     pk_backend_spawn_set_name(spawn, "aptcc");
 }
 
@@ -161,7 +163,9 @@ PkBitfield pk_backend_get_filters(PkBackend *backend)
  */
 gchar** pk_backend_get_mime_types(PkBackend *backend)
 {
-    const gchar *mime_types[] = { "application/x-deb", NULL };
+    const gchar *mime_types[] = { "application/vnd.debian.binary-package",
+                                  "application/x-deb",
+                                  NULL };
     return g_strdupv ((gchar **) mime_types);
 }
 
@@ -255,7 +259,7 @@ static void backend_depends_on_or_requires_thread(PkBackendJob *job, GVariant *p
         }
     }
 
-    // It's faster to emmit the packages here than in the matching part
+    // It's faster to emit the packages here than in the matching part
     apt->emitPackages(output, filters);
 }
 
@@ -263,7 +267,7 @@ static void backend_depends_on_or_requires_thread(PkBackendJob *job, GVariant *p
  * pk_backend_depends_on:
  */
 void pk_backend_depends_on(PkBackend *backend, PkBackendJob *job, PkBitfield filters,
-                            gchar **package_ids, gboolean recursive)
+                           gchar **package_ids, gboolean recursive)
 {
     pk_backend_job_thread_create(job, backend_depends_on_or_requires_thread, NULL, NULL);
 }
@@ -272,10 +276,10 @@ void pk_backend_depends_on(PkBackend *backend, PkBackendJob *job, PkBitfield fil
  * pk_backend_required_by:
  */
 void pk_backend_required_by(PkBackend *backend,
-                             PkBackendJob *job,
-                             PkBitfield filters,
-                             gchar **package_ids,
-                             gboolean recursive)
+                            PkBackendJob *job,
+                            PkBitfield filters,
+                            gchar **package_ids,
+                            gboolean recursive)
 {
     pk_backend_job_thread_create(job, backend_depends_on_or_requires_thread, NULL, NULL);
 }
@@ -343,28 +347,32 @@ void pk_backend_get_files(PkBackend *backend, PkBackendJob *job, gchar **package
 
 static void backend_get_details_thread(PkBackendJob *job, GVariant *params, gpointer user_data)
 {
-    gchar **package_ids;
+    gchar **package_ids = nullptr;
+    gchar **files = nullptr;
     PkRoleEnum role;
     role = pk_backend_job_get_role(job);
 
-    g_variant_get(params, "(^a&s)",
-                  &package_ids);
+    if (role == PK_ROLE_ENUM_GET_DETAILS_LOCAL) {
+        g_variant_get(params, "(^a&s)",
+                      &files);
+    } else {
+        g_variant_get(params, "(^a&s)",
+                      &package_ids);
+    }
 
     AptIntf *apt = static_cast<AptIntf*>(pk_backend_job_get_user_data(job));
-    if (!apt->init()) {
+    if (!apt->init(files)) {
         g_debug ("Failed to create apt cache");
         return;
     }
 
-    if (package_ids == NULL) {
-        pk_backend_job_error_code(job,
-                                  PK_ERROR_ENUM_PACKAGE_ID_INVALID,
-                                  "Invalid package id");
-        return;
-    }
-
     pk_backend_job_set_status(job, PK_STATUS_ENUM_QUERY);
-    PkgList pkgs = apt->resolvePackageIds(package_ids);
+    PkgList pkgs;
+    if (role == PK_ROLE_ENUM_GET_DETAILS_LOCAL) {
+        pkgs = apt->resolveLocalFiles(files);
+    } else {
+        pkgs = apt->resolvePackageIds(package_ids);
+    }
 
     if (role == PK_ROLE_ENUM_GET_UPDATE_DETAIL) {
         apt->emitUpdateDetails(pkgs);
@@ -387,6 +395,29 @@ void pk_backend_get_update_detail(PkBackend *backend, PkBackendJob *job, gchar *
 void pk_backend_get_details(PkBackend *backend, PkBackendJob *job, gchar **package_ids)
 {
     pk_backend_job_thread_create(job, backend_get_details_thread, NULL, NULL);
+}
+
+void pk_backend_get_details_local(PkBackend *backend, PkBackendJob *job, gchar **files)
+{
+    pk_backend_job_thread_create(job, backend_get_details_thread, NULL, NULL);
+}
+
+static void backend_get_files_local_thread(PkBackendJob *job, GVariant *params, gpointer user_data)
+{
+    gchar **files = nullptr;
+    g_variant_get(params, "(^a&s)",
+                  &files);
+
+    AptIntf *apt = static_cast<AptIntf*>(pk_backend_job_get_user_data(job));
+
+    for (int i = 0; i < g_strv_length(files); ++i) {
+        apt->emitPackageFilesLocal(files[i]);
+    }
+}
+
+void pk_backend_get_files_local(PkBackend *backend, PkBackendJob *job, gchar **files)
+{
+    pk_backend_job_thread_create(job, backend_get_files_local_thread, NULL, NULL);
 }
 
 static void backend_get_updates_thread(PkBackendJob *job, GVariant *params, gpointer user_data)
@@ -491,8 +522,7 @@ static void pk_backend_download_packages_thread(PkBackendJob *job, GVariant *par
         AcqPackageKitStatus Stat(apt, job);
 
         // get a fetcher
-        pkgAcquire fetcher;
-        fetcher.Setup(&Stat);
+        pkgAcquire fetcher(&Stat);
         gchar *pi;
 
         // TODO this might be useful when the item is in the cache
@@ -519,9 +549,9 @@ static void pk_backend_download_packages_thread(PkBackendJob *job, GVariant *par
             pi = package_ids[i];
             if (pk_package_id_check(pi) == false) {
                 pk_backend_job_error_code(job,
-                                        PK_ERROR_ENUM_PACKAGE_ID_INVALID,
-                                        "%s",
-                                        pi);
+                                          PK_ERROR_ENUM_PACKAGE_ID_INVALID,
+                                          "%s",
+                                          pi);
                 return;
             }
 
@@ -537,16 +567,16 @@ static void pk_backend_download_packages_thread(PkBackendJob *job, GVariant *par
             } else {
                 if(!ver.Downloadable()) {
                     _error->Error("No downloadable files for %s,"
-                                "perhaps it is a local or obsolete" "package?",
-                                pi);
+                                  "perhaps it is a local or obsolete" "package?",
+                                  pi);
                     continue;
                 }
 
                 string storeFileName;
                 if (!apt->getArchive(&fetcher,
-                                    ver,
-                                    directory,
-                                    storeFileName)) {
+                                     ver,
+                                     directory,
+                                     storeFileName)) {
                     return;
                 }
 
@@ -636,7 +666,7 @@ static void pk_backend_resolve_thread(PkBackendJob *job, GVariant *params, gpoin
 
     PkgList pkgs = apt->resolvePackageIds(search);
 
-    // It's faster to emmit the packages here rather than in the matching part
+    // It's faster to emit the packages here rather than in the matching part
     apt->emitPackages(pkgs, filters);
 }
 
@@ -699,7 +729,7 @@ static void backend_search_groups_thread(PkBackendJob *job, GVariant *params, gp
         return;
     }
 
-    // It's faster to emmit the packages here rather than in the matching part
+    // It's faster to emit the packages here rather than in the matching part
     PkgList output;
     output = apt->getPackagesFromGroup(search);
     apt->emitPackages(output, filters);
@@ -752,7 +782,7 @@ static void backend_search_package_thread(PkBackendJob *job, GVariant *params, g
     }
     g_free(search);
 
-    // It's faster to emmit the packages here than in the matching part
+    // It's faster to emit the packages here than in the matching part
     apt->emitPackages(output, filters);
 
     pk_backend_job_set_percentage(job, 100);
@@ -822,46 +852,35 @@ static void backend_manage_packages_thread(PkBackendJob *job, GVariant *params, 
         fixBroken = true;
     }
 
-    g_debug("FILE INSTALL: %i", fileInstall);
     pk_backend_job_set_allow_cancel(job, true);
 
     AptIntf *apt = static_cast<AptIntf*>(pk_backend_job_get_user_data(job));
-    if (!apt->init()) {
+    if (!apt->init(full_paths)) {
         g_debug("Failed to create apt cache");
         return;
     }
 
     pk_backend_job_set_status(job, PK_STATUS_ENUM_QUERY);
-    PkgList installPkgs, removePkgs;
+    PkgList installPkgs, removePkgs, updatePkgs;
 
-    if (fileInstall) {
-        // File installation EXPERIMENTAL
-
-        // GDebi can not install more than one package at time
-        if (g_strv_length(full_paths) > 1) {
-            pk_backend_job_error_code(job,
-                                  PK_ERROR_ENUM_NOT_SUPPORTED,
-                                  "The backend can only proccess one file at time.");
-            return;
-        }
-
-        // get the list of packages to install
-        if (!apt->markFileForInstall(full_paths[0], installPkgs, removePkgs)) {
-            return;
-        }
-
-        cout << "installPkgs.size: " << installPkgs.size() << endl;
-        cout << "removePkgs.size: " << removePkgs.size() << endl;
-
-    } else if (!fixBroken) {
+    if (!fixBroken) {
         // Resolve the given packages
         if (role == PK_ROLE_ENUM_REMOVE_PACKAGES) {
             removePkgs = apt->resolvePackageIds(package_ids);
-        } else {
+        } else if (role == PK_ROLE_ENUM_INSTALL_PACKAGES) {
             installPkgs = apt->resolvePackageIds(package_ids);
+        } else if (role == PK_ROLE_ENUM_UPDATE_PACKAGES) {
+            updatePkgs = apt->resolvePackageIds(package_ids);
+        } else if (role == PK_ROLE_ENUM_INSTALL_FILES) {
+            installPkgs = apt->resolveLocalFiles(full_paths);
+        } else {
+            pk_backend_job_error_code(job,
+                                      PK_ERROR_ENUM_PACKAGE_NOT_FOUND,
+                                      "Could not figure out what to do to apply the change.");
+            return;
         }
 
-        if (removePkgs.size() == 0 && installPkgs.size() == 0) {
+        if (removePkgs.size() == 0 && installPkgs.size() == 0 && updatePkgs.size() == 0) {
             pk_backend_job_error_code(job,
                                       PK_ERROR_ENUM_PACKAGE_NOT_FOUND,
                                       "Could not find package(s)");
@@ -870,34 +889,16 @@ static void backend_manage_packages_thread(PkBackendJob *job, GVariant *params, 
     }
 
     // Install/Update/Remove packages, or just simulate
-    bool ret;
-    ret = apt->runTransaction(installPkgs,
-                              removePkgs,
-                              fileInstall, // Mark newly installed packages as auto-installed
-                                           // (they're dependencies of the new local package)
-                              fixBroken,
-                              transaction_flags,
-                              autoremove);
+    bool ret = apt->runTransaction(installPkgs,
+                                   removePkgs,
+                                   updatePkgs,
+                                   fixBroken,
+                                   transaction_flags,
+                                   autoremove);
     if (!ret) {
         // Print transaction errors
-        g_debug("AptIntf::runTransaction() failed: ", _error->PendingError());
+        g_debug("AptIntf::runTransaction() failed: %i", _error->PendingError());
         return;
-    }
-
-    if (fileInstall) {
-        // Now perform the installation!
-        gchar *path;
-        for (uint i = 0; i < g_strv_length(full_paths); ++i) {
-            if (apt->cancelled()) {
-                break;
-            }
-
-            path = full_paths[i];
-            if (!apt->installFile(path, simulate)) {
-                cout << "Installation of DEB file " << path << " failed." << endl;
-                return;
-            }
-        }
     }
 }
 
@@ -986,55 +987,55 @@ static void backend_repo_manager_thread(PkBackendJob *job, GVariant *params, gpo
                        &enabled);
     }
 
-    SourcesList _lst;
-    if (_lst.ReadSources() == false) {
+    SourcesList sourcesList;
+    if (sourcesList.ReadSources() == false) {
         _error->
                 Warning("Ignoring invalid record(s) in sources.list file!");
         //return false;
     }
 
-    if (_lst.ReadVendors() == false) {
+    if (sourcesList.ReadVendors() == false) {
         _error->Error("Cannot read vendors.list file");
         show_errors(job, PK_ERROR_ENUM_FAILED_CONFIG_PARSING);
         return;
     }
 
-    for (SourcesListIter it = _lst.SourceRecords.begin();
-         it != _lst.SourceRecords.end(); ++it) {
-        if ((*it)->Type & SourcesList::Comment) {
+    for (SourcesList::SourceRecord *souceRecord : sourcesList.SourceRecords) {
+
+        if (souceRecord->Type & SourcesList::Comment) {
             continue;
         }
 
-        string sections = (*it)->joinedSections();
+        string sections = souceRecord->joinedSections();
         
-        string repoId = (*it)->repoId();
+        string repoId = souceRecord->repoId();
 
         if (role == PK_ROLE_ENUM_GET_REPO_LIST) {
             if (pk_bitfield_contain(filters, PK_FILTER_ENUM_NOT_DEVELOPMENT) &&
-                ((*it)->Type & SourcesList::DebSrc ||
-                 (*it)->Type & SourcesList::RpmSrc ||
-                 (*it)->Type & SourcesList::RpmSrcDir ||
-                 (*it)->Type & SourcesList::RepomdSrc)) {
+                    (souceRecord->Type & SourcesList::DebSrc ||
+                     souceRecord->Type & SourcesList::RpmSrc ||
+                     souceRecord->Type & SourcesList::RpmSrcDir ||
+                     souceRecord->Type & SourcesList::RepomdSrc)) {
                 continue;
             }
 
             pk_backend_job_repo_detail(job,
                                        repoId.c_str(),
-                                       (*it)->niceName().c_str(),
-                                       !((*it)->Type & SourcesList::Disabled));
+                                       souceRecord->niceName().c_str(),
+                                       !(souceRecord->Type & SourcesList::Disabled));
         } else if (repoId.compare(repo_id) == 0) {
             // Found the repo to enable/disable
             found = true;
 
             if (role == PK_ROLE_ENUM_REPO_ENABLE) {
                 if (enabled) {
-                    (*it)->Type = (*it)->Type & ~SourcesList::Disabled;
+                    souceRecord->Type = souceRecord->Type & ~SourcesList::Disabled;
                 } else {
-                    (*it)->Type |= SourcesList::Disabled;
+                    souceRecord->Type |= SourcesList::Disabled;
                 }
 
                 // Commit changes
-                if (!_lst.UpdateSources()) {
+                if (!sourcesList.UpdateSources()) {
                     _error->Error("Could not update sources file");
                     show_errors(job, PK_ERROR_ENUM_CANNOT_WRITE_REPO_CONFIG);
                 }
@@ -1046,19 +1047,19 @@ static void backend_repo_manager_thread(PkBackendJob *job, GVariant *params, gpo
                         return;
                     }
 
-                    PkgList removePkgs = apt->getPackagesFromRepo(*it);
+                    PkgList removePkgs = apt->getPackagesFromRepo(souceRecord);
                     if (removePkgs.size() > 0) {
                         // Install/Update/Remove packages, or just simulate
                         bool ret;
                         ret = apt->runTransaction(PkgList(),
-                                                removePkgs,
-                                                false,
-                                                false,
-                                                transaction_flags,
-                                                false);
+                                                  removePkgs,
+                                                  PkgList(),
+                                                  false,
+                                                  transaction_flags,
+                                                  false);
                         if (!ret) {
                             // Print transaction errors
-                            g_debug("AptIntf::runTransaction() failed: ", _error->PendingError());
+                            g_debug("AptIntf::runTransaction() failed: %i", _error->PendingError());
                             return;
                         }
                     }
@@ -1066,10 +1067,10 @@ static void backend_repo_manager_thread(PkBackendJob *job, GVariant *params, gpo
 
                 // Now if we are not simulating remove the repository
                 if (!pk_bitfield_contain(transaction_flags, PK_TRANSACTION_FLAG_ENUM_SIMULATE)) {
-                    _lst.RemoveSource(*it);
+                    sourcesList.RemoveSource(souceRecord);
 
                     // Commit changes
-                    if (!_lst.UpdateSources()) {
+                    if (!sourcesList.UpdateSources()) {
                         _error->Error("Could not update sources file");
                         show_errors(job, PK_ERROR_ENUM_CANNOT_WRITE_REPO_CONFIG);
                     }
@@ -1082,8 +1083,8 @@ static void backend_repo_manager_thread(PkBackendJob *job, GVariant *params, gpo
     }
 
     if ((role == PK_ROLE_ENUM_REPO_ENABLE || role == PK_ROLE_ENUM_REPO_REMOVE) &&
-        !found) {
-        _error->Error("Could not found the repository");
+            !found) {
+        _error->Error("Could not find the repository");
         show_errors(job, PK_ERROR_ENUM_REPO_NOT_AVAILABLE);
     }
 }
@@ -1133,7 +1134,7 @@ static void backend_get_packages_thread(PkBackendJob *job, GVariant *params, gpo
     PkgList output;
     output = apt->getPackages();
 
-    // It's faster to emmit the packages rather here than in the matching part
+    // It's faster to emit the packages rather here than in the matching part
     apt->emitPackages(output, filters);
 }
 
@@ -1167,7 +1168,9 @@ PkBitfield pk_backend_get_roles(PkBackend *backend)
                 PK_ROLE_ENUM_CANCEL,
                 PK_ROLE_ENUM_DEPENDS_ON,
                 PK_ROLE_ENUM_GET_DETAILS,
+                PK_ROLE_ENUM_GET_DETAILS_LOCAL,
                 PK_ROLE_ENUM_GET_FILES,
+                PK_ROLE_ENUM_GET_FILES_LOCAL,
                 PK_ROLE_ENUM_REQUIRED_BY,
                 PK_ROLE_ENUM_GET_PACKAGES,
                 PK_ROLE_ENUM_WHAT_PROVIDES,
@@ -1188,16 +1191,12 @@ PkBitfield pk_backend_get_roles(PkBackend *backend)
                 PK_ROLE_ENUM_REPO_ENABLE,
                 PK_ROLE_ENUM_REPAIR_SYSTEM,
                 PK_ROLE_ENUM_REPO_REMOVE,
+                PK_ROLE_ENUM_INSTALL_FILES,
                 -1);
 
     // only add GetDistroUpgrades if the binary is present
     if (g_file_test(PREUPGRADE_BINARY, G_FILE_TEST_EXISTS)) {
         pk_bitfield_add(roles, PK_ROLE_ENUM_GET_DISTRO_UPGRADES);
-    }
-
-    // only add GetDistroUpgrades if the binary is present
-    if (g_file_test(GDEBI_BINARY, G_FILE_TEST_EXISTS)) {
-        pk_bitfield_add(roles, PK_ROLE_ENUM_INSTALL_FILES);
     }
 
     return roles;
